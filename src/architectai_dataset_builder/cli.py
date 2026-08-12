@@ -3,13 +3,15 @@ ArchitectAI Dataset Builder Command Line Interface
 """
 
 from collections import Counter
-from pathlib import Path
+from typing import Any
+
 import click
 
 from architectai_dataset_builder.config import Config
 from architectai_dataset_builder.dedup.deduplicator import Deduplicator
 from architectai_dataset_builder.exporters.build_manifest_exporter import BuildManifestExporter
 from architectai_dataset_builder.exporters.jsonl_exporter import JSONLExporter
+from architectai_dataset_builder.models.manifest import SourceManifest
 from architectai_dataset_builder.normalizers.canonical_normalizer import CanonicalNormalizer
 from architectai_dataset_builder.normalizers.relevance_filter import RelevanceFilter
 from architectai_dataset_builder.parsers.eval_adapters.archbench import ArchBenchEvalAdapter
@@ -20,7 +22,10 @@ from architectai_dataset_builder.parsers.training.madr import MADRParser
 from architectai_dataset_builder.parsers.training.opendatahub_adr import OpenDataHubADRParser
 from architectai_dataset_builder.parsers.training.r2abench import R2ABenchParser
 from architectai_dataset_builder.reports.stats_generator import StatsGenerator
-from architectai_dataset_builder.sources.downloader import ProductionSourceUnavailableError, SourceDownloader
+from architectai_dataset_builder.sources.downloader import (
+    ProductionSourceUnavailableError,
+    SourceDownloader,
+)
 from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.splitters.contamination_checker import ContaminationChecker
 from architectai_dataset_builder.splitters.deterministic_splitter import DeterministicSplitter
@@ -32,13 +37,11 @@ from architectai_dataset_builder.validators.schema_validator import SchemaValida
 @click.group()
 def cli() -> None:
     """ArchitectAI Dataset Builder CLI"""
-    pass
 
 
 @cli.group()
 def sources() -> None:
     """Manage architecture data sources and manifests."""
-    pass
 
 
 @sources.command(name="list")
@@ -96,7 +99,7 @@ def build_dataset(build_id: str, mode: str) -> None:
         except ProductionSourceUnavailableError as e:
             if mode == "production":
                 click.echo(f"CRITICAL ERROR: {e}")
-                raise e
+                raise
             downloader.fetch_source(sid, mode="fixture")
             source_fetch_modes[sid] = "fixture"
 
@@ -112,7 +115,7 @@ def build_dataset(build_id: str, mode: str) -> None:
 
     # 3. Normalize & Filter Relevance / License Gating
     parsed_samples = []
-    quarantine_reasons = Counter()
+    quarantine_reasons: Counter[str] = Counter()
     failed_parse_count = 0
 
     madr_manifest = registry.get_manifest("madr")
@@ -123,11 +126,12 @@ def build_dataset(build_id: str, mode: str) -> None:
     assert odh_manifest is not None
     assert r2a_manifest is not None
 
-    def process_records(records, manifest):
+    def process_records(records: list[dict[str, Any]], manifest: SourceManifest) -> None:
         nonlocal failed_parse_count
         for r in records:
             if r.get("is_quarantined"):
-                quarantine_reasons[r.get("quarantine_reason", "unknown")] += 1
+                reason = str(r.get("quarantine_reason", "unknown"))
+                quarantine_reasons[reason] += 1
                 continue
 
             try:
@@ -135,7 +139,7 @@ def build_dataset(build_id: str, mode: str) -> None:
                     parsed_samples.append(normalizer.normalize(r, manifest))
                 else:
                     quarantine_reasons["low_relevance"] += 1
-            except Exception:
+            except (ValueError, KeyError, TypeError, AttributeError):
                 failed_parse_count += 1
 
     process_records(raw_madr_records, madr_manifest)
@@ -149,7 +153,7 @@ def build_dataset(build_id: str, mode: str) -> None:
     valid_samples = []
     for s in parsed_samples:
         if license_gating.validate_sample(s):
-            is_valid, errs = schema_validator.validate(s)
+            is_valid, _ = schema_validator.validate(s)
             if is_valid:
                 valid_samples.append(s)
             else:

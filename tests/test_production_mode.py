@@ -1,8 +1,19 @@
-import pytest
 from pathlib import Path
-from architectai_dataset_builder.sources.downloader import SourceDownloader, ProductionSourceUnavailableError
+
+import pytest
+
+from architectai_dataset_builder.models.manifest import (
+    LicenseMetadata,
+    SourceManifest,
+    SourceOrigin,
+    SourcePolicy,
+    SourceVersion,
+)
+from architectai_dataset_builder.sources.downloader import (
+    ProductionSourceUnavailableError,
+    SourceDownloader,
+)
 from architectai_dataset_builder.sources.registry import SourceRegistry
-from architectai_dataset_builder.models.manifest import SourceManifest, SourceOrigin, SourceVersion, LicenseMetadata, SourcePolicy
 
 
 def test_production_mode_unavailable_error(tmp_path: Path):

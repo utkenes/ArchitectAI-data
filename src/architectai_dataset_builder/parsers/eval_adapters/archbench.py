@@ -4,8 +4,12 @@ ArchBench Evaluation Adapter -> ArchitectureGenerationEvalSample (Dynamic Ingest
 
 import json
 from pathlib import Path
-from architectai_dataset_builder.models.evaluation import ArchitectureGenerationEvalSample, EvalSourceMetadata
-from architectai_dataset_builder.utils.hashing import compute_sha256_str, compute_sha256_file
+
+from architectai_dataset_builder.models.evaluation import (
+    ArchitectureGenerationEvalSample,
+    EvalSourceMetadata,
+)
+from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
 
 

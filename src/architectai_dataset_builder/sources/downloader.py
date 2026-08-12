@@ -3,9 +3,8 @@ Immutable Production Source Downloader and Raw Fixture Manager
 """
 
 import subprocess
-import shutil
 from pathlib import Path
-from typing import Dict, Any, Optional
+
 from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
 
@@ -13,11 +12,9 @@ from architectai_dataset_builder.utils.hashing import compute_sha256_file, compu
 class ProductionSourceUnavailableError(Exception):
     """Raised when a required source cannot be fetched in production mode."""
 
-    pass
-
 
 class SourceDownloader:
-    def __init__(self, data_dir: Path, registry: SourceRegistry):
+    def __init__(self, data_dir: Path, registry: SourceRegistry) -> None:
         self.data_dir = Path(data_dir)
         self.raw_dir = self.data_dir / "raw"
         self.registry = registry
@@ -33,7 +30,6 @@ class SourceDownloader:
         repo_url = manifest.origin.repository_url
         revision = manifest.version.revision or manifest.version.release_version or "main"
 
-        # Check if repo URL is available for production git fetch
         is_git_repo = repo_url and repo_url.startswith("https://github.com/")
 
         if mode == "production" and is_git_repo and repo_url:
@@ -44,39 +40,36 @@ class SourceDownloader:
                 )
             manifest.notes = f"Mode: production | Git URL: {repo_url} | Revision: {revision}"
         else:
-            # Fallback or local fixture generation
             self._ensure_fixture_files(source_id, dest_dir)
             manifest.notes = f"Mode: fixture | Local Directory: {dest_dir}"
 
-        # Compute SHA-256 for all raw files in dest_dir
         manifest.integrity["raw_sha256"] = self._compute_dir_hash(dest_dir)
         return dest_dir
 
     def _fetch_git_repository(self, repo_url: str, revision: str, dest_dir: Path) -> bool:
-        # If dest_dir already contains cloned git repository or raw files, verify
         if any(dest_dir.iterdir()):
             return True
 
         try:
-            # Clone pinned revision into dest_dir
             res = subprocess.run(
                 ["git", "clone", "--depth", "1", "--branch", revision, repo_url, str(dest_dir)],
                 capture_output=True,
                 text=True,
                 timeout=60,
+                check=False,
             )
             if res.returncode == 0:
                 return True
 
-            # If branch failed, try cloning default and checking out commit sha if specified
             res_default = subprocess.run(
                 ["git", "clone", "--depth", "1", repo_url, str(dest_dir)],
                 capture_output=True,
                 text=True,
                 timeout=60,
+                check=False,
             )
             return res_default.returncode == 0
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             return False
 
     def _compute_dir_hash(self, dir_path: Path) -> str:
@@ -88,7 +81,7 @@ class SourceDownloader:
 
     def _ensure_fixture_files(self, source_id: str, dest_dir: Path) -> None:
         if any(dest_dir.iterdir()):
-            return  # Already populated
+            return
 
         if source_id == "madr":
             adr1 = dest_dir / "0001-use-madr.md"

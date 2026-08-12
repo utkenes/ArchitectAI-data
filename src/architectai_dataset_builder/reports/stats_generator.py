@@ -4,6 +4,7 @@ Dataset Statistics Generator
 
 from collections import Counter
 from pathlib import Path
+
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.models.reports import DatasetStatsReport
 from architectai_dataset_builder.utils.io import write_jsonl
