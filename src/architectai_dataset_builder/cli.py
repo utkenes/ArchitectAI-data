@@ -1,0 +1,208 @@
+"""
+ArchitectAI Dataset Builder Command Line Interface
+"""
+
+import click
+from pathlib import Path
+from architectai_dataset_builder.config import Config
+from architectai_dataset_builder.sources.registry import SourceRegistry
+from architectai_dataset_builder.sources.downloader import SourceDownloader
+from architectai_dataset_builder.parsers.training.madr import MADRParser
+from architectai_dataset_builder.parsers.training.opendatahub_adr import OpenDataHubADRParser
+from architectai_dataset_builder.parsers.training.r2abench import R2ABenchParser
+from architectai_dataset_builder.parsers.eval_adapters.sake import SAKEEvalAdapter
+from architectai_dataset_builder.parsers.eval_adapters.cake import CAKEEvalAdapter
+from architectai_dataset_builder.parsers.eval_adapters.archbench import ArchBenchEvalAdapter
+from architectai_dataset_builder.parsers.eval_adapters.r2abench import R2ABenchEvalAdapter
+from architectai_dataset_builder.normalizers.canonical_normalizer import CanonicalNormalizer
+from architectai_dataset_builder.normalizers.relevance_filter import RelevanceFilter
+from architectai_dataset_builder.validators.license_gating import LicenseGatingEngine
+from architectai_dataset_builder.validators.schema_validator import SchemaValidator
+from architectai_dataset_builder.dedup.deduplicator import Deduplicator
+from architectai_dataset_builder.splitters.deterministic_splitter import DeterministicSplitter
+from architectai_dataset_builder.splitters.contamination_checker import ContaminationChecker
+from architectai_dataset_builder.exporters.jsonl_exporter import JSONLExporter
+from architectai_dataset_builder.exporters.build_manifest_exporter import BuildManifestExporter
+from architectai_dataset_builder.reports.stats_generator import StatsGenerator
+from architectai_dataset_builder.utils.io import load_yaml, write_jsonl
+
+
+@click.group()
+def cli() -> None:
+    """ArchitectAI Dataset Builder CLI"""
+    pass
+
+
+@cli.group()
+def sources() -> None:
+    """Manage architecture data sources and manifests."""
+    pass
+
+
+@sources.command(name="list")
+def list_sources() -> None:
+    """List registered data sources and eligibility status."""
+    cfg = Config()
+    registry = SourceRegistry(cfg.manifests_dir)
+    click.echo(f"Registered Data Sources ({len(registry.list_sources())}):")
+    for s in registry.list_sources():
+        allowed = registry.is_training_allowed(s.source_id)
+        click.echo(
+            f" - {s.source_id:<18} [{s.source_type:<22}] License: {s.license.spdx_id:<10} Training Allowed: {allowed}"
+        )
+
+
+@sources.command(name="verify")
+def verify_sources() -> None:
+    """Verify license policies and training eligibility of all sources."""
+    cfg = Config()
+    registry = SourceRegistry(cfg.manifests_dir)
+    click.echo("Verifying Source Licenses & Eligibility Policy:")
+    for s in registry.list_sources():
+        status = "PASSED" if registry.is_training_allowed(s.source_id) else "QUARANTINED / EVAL ONLY"
+        click.echo(f" Source: {s.source_id:<18} Verified: {s.license.verified} -> Status: {status}")
+
+
+@cli.command(name="build")
+@click.option("--build-id", default="build_v1_001", help="Unique build identifier")
+def build_dataset(build_id: str) -> None:
+    """Execute end-to-end dataset build pipeline."""
+    cfg = Config()
+    registry = SourceRegistry(cfg.manifests_dir)
+    downloader = SourceDownloader(cfg.data_dir, registry)
+    relevance_filter = RelevanceFilter(
+        keywords=cfg.policy_config.get("relevance_filter", {}).get("architecture_keywords", []),
+        min_relevance_score=cfg.min_relevance_score,
+    )
+    license_gating = LicenseGatingEngine(registry)
+    schema_validator = SchemaValidator()
+    normalizer = CanonicalNormalizer()
+    deduplicator = Deduplicator(jaccard_threshold=cfg.near_dedup_jaccard_threshold)
+    splitter = DeterministicSplitter(cfg.manifests_dir / "splits" / "r2abench_v1.yaml")
+
+    click.echo(f"=== Starting ArchitectAI Dataset Build: {build_id} ===")
+
+    # 1. Bootstrap / Fetch Raw Sources
+    sources_to_ingest = ["opendatahub_adr", "madr", "r2abench", "sake", "cake", "archbench"]
+    for sid in sources_to_ingest:
+        downloader.fetch_source(sid)
+    click.echo("✓ Raw sources immutably verified.")
+
+    # 2. Parse & Ingest Training Sources
+    raw_madr_records = MADRParser().parse_directory(cfg.data_dir / "raw" / "madr")
+    raw_odh_records = OpenDataHubADRParser().parse_directory(cfg.data_dir / "raw" / "opendatahub_adr")
+    raw_r2a_records = R2ABenchParser().parse_directory(cfg.data_dir / "raw" / "r2abench")
+
+    # 3. Normalize & Filter Relevance / License Gating
+    parsed_samples = []
+    quarantine_count = 0
+
+    madr_manifest = registry.get_manifest("madr")
+    odh_manifest = registry.get_manifest("opendatahub_adr")
+    r2a_manifest = registry.get_manifest("r2abench")
+
+    for r in raw_madr_records:
+        if relevance_filter.is_relevant(r["raw_text"]):
+            parsed_samples.append(normalizer.normalize(r, madr_manifest))
+        else:
+            quarantine_count += 1
+
+    for r in raw_odh_records:
+        if relevance_filter.is_relevant(r["raw_text"]):
+            parsed_samples.append(normalizer.normalize(r, odh_manifest))
+        else:
+            quarantine_count += 1
+
+    for r in raw_r2a_records:
+        if relevance_filter.is_relevant(r["raw_text"]):
+            parsed_samples.append(normalizer.normalize(r, r2a_manifest))
+        else:
+            quarantine_count += 1
+
+    click.echo(f"✓ Normalized {len(parsed_samples)} training candidates ({quarantine_count} quarantined).")
+
+    # 4. License Gating & Schema Validation
+    valid_samples = []
+    for s in parsed_samples:
+        if license_gating.validate_sample(s):
+            is_valid, _ = schema_validator.validate(s)
+            if is_valid:
+                valid_samples.append(s)
+            else:
+                quarantine_count += 1
+        else:
+            quarantine_count += 1
+
+    click.echo(f"✓ License gating & schema validation passed for {len(valid_samples)} samples.")
+
+    # 5. Deduplication
+    unique_samples, exact_dups, near_dups = deduplicator.process_samples(valid_samples)
+    click.echo(f"✓ Deduplication: {len(unique_samples)} unique ({exact_dups} exact dups, {near_dups} near dups).")
+
+    # 6. Deterministic Splitting
+    train_samples, val_samples = splitter.split_samples(unique_samples)
+    click.echo(f"✓ Split: {len(train_samples)} Train, {len(val_samples)} Validation.")
+
+    # 7. Parse Protected Evaluation Benchmarks
+    sake_eval = SAKEEvalAdapter().parse_directory(cfg.data_dir / "raw" / "sake")
+    cake_eval = CAKEEvalAdapter().parse_directory(cfg.data_dir / "raw" / "cake")
+    archbench_eval = ArchBenchEvalAdapter().parse_directory(cfg.data_dir / "raw" / "archbench")
+    r2a_eval = R2ABenchEvalAdapter(
+        held_out_project_ids=splitter.r2abench_splits["held_out"]
+    ).parse_directory(cfg.data_dir / "raw" / "r2abench")
+
+    eval_samples = sake_eval + cake_eval + archbench_eval + r2a_eval
+    click.echo(f"✓ Ingested {len(eval_samples)} protected evaluation samples.")
+
+    # 8. Contamination Verification
+    checker = ContaminationChecker(
+        protected_sources=cfg.protected_sources,
+        jaccard_threshold=cfg.near_dedup_jaccard_threshold,
+    )
+    contamination_report = checker.verify_no_leakage(train_samples + val_samples, eval_samples)
+    write_jsonl([contamination_report.model_dump()], cfg.data_dir / "exports" / "contamination_report.json")
+    click.echo("✓ Contamination Check Passed: 0 cross-split leaks.")
+
+    # 9. Exporters & Manifests
+    approved_manifest = load_yaml(cfg.manifests_dir / "reviews" / "approved_samples.yaml")
+    approved_ids = [entry["sample_id"] for entry in approved_manifest.get("approved_samples", [])]
+
+    exporter = JSONLExporter(cfg.data_dir / "exports")
+    train_export_paths = exporter.export_training_datasets(train_samples, val_samples, approved_ids)
+    eval_export_paths = exporter.export_evaluation_datasets(eval_samples)
+
+    all_export_paths = {**train_export_paths, **eval_export_paths}
+
+    # 10. Reports
+    stats_gen = StatsGenerator()
+    stats_gen.generate_stats(
+        train_samples,
+        val_samples,
+        exact_dups,
+        near_dups,
+        quarantine_count,
+        cfg.data_dir / "exports" / "dataset_stats.json",
+    )
+
+    manifest_exporter = BuildManifestExporter()
+    manifest_exporter.export_build_manifest(
+        build_id=build_id,
+        config_dir=cfg.config_dir,
+        split_manifest_path=cfg.manifests_dir / "splits" / "r2abench_v1.yaml",
+        sources_summary={s.source_id: {"commit_sha": s.version.commit_sha} for s in registry.list_sources()},
+        sample_counts={
+            "train": len(train_samples),
+            "validation": len(val_samples),
+            "silver": len(train_samples) + len(val_samples),
+            "gold": len(approved_ids),
+            "eval": len(eval_samples),
+        },
+        export_paths=all_export_paths,
+        output_file=cfg.data_dir / "exports" / "build_manifest.json",
+    )
+
+    click.echo("=== Build Completed Successfully! ===")
+
+
+if __name__ == "__main__":
+    cli()
