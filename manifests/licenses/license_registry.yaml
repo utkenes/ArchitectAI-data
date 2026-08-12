@@ -1,0 +1,65 @@
+licenses:
+  Apache-2.0:
+    spdx_id: Apache-2.0
+    name: Apache License 2.0
+    verified: true
+    verification_source: official_spdx
+    policy:
+      ingestion_allowed: true
+      training_allowed: true
+      redistribution_allowed: true
+      modification_allowed: true
+      commercial_use_allowed: true
+      attribution_required: true
+
+  MIT:
+    spdx_id: MIT
+    name: MIT License
+    verified: true
+    verification_source: official_spdx
+    policy:
+      ingestion_allowed: true
+      training_allowed: true
+      redistribution_allowed: true
+      modification_allowed: true
+      commercial_use_allowed: true
+      attribution_required: true
+
+  CC0-1.0:
+    spdx_id: CC0-1.0
+    name: Creative Commons Zero v1.0 Universal
+    verified: true
+    verification_source: official_spdx
+    policy:
+      ingestion_allowed: true
+      training_allowed: true
+      redistribution_allowed: true
+      modification_allowed: true
+      commercial_use_allowed: true
+      attribution_required: false
+
+  CC-BY-4.0:
+    spdx_id: CC-BY-4.0
+    name: Creative Commons Attribution 4.0 International
+    verified: true
+    verification_source: official_spdx
+    policy:
+      ingestion_allowed: true
+      training_allowed: true
+      redistribution_allowed: true
+      modification_allowed: true
+      commercial_use_allowed: true
+      attribution_required: true
+
+  QUARANTINE:
+    spdx_id: UNKNOWN
+    name: Unverified or Ambiguous License
+    verified: false
+    verification_source: unverified
+    policy:
+      ingestion_allowed: true
+      training_allowed: false
+      redistribution_allowed: false
+      modification_allowed: false
+      commercial_use_allowed: false
+      attribution_required: true

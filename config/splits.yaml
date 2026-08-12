@@ -1,0 +1,5 @@
+splits:
+  random_seed: 42
+  ratios:
+    train: 0.80
+    validation: 0.20

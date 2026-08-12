@@ -1,0 +1,38 @@
+protected_evaluation_sources:
+  - sake
+  - cake
+  - archbench
+  - r2abench_holdout
+
+deduplication:
+  # Initial conservative default baseline; subject to calibration against dataset distributions
+  near_duplicate_jaccard_threshold: 0.85
+  ngram_size: 3
+
+relevance_filter:
+  # Initial conservative default baseline; subject to domain keyword coverage calibration
+  min_relevance_score: 0.60
+  architecture_keywords:
+    - architecture
+    - decision
+    - rationale
+    - tradeoff
+    - component
+    - constraint
+    - requirement
+    - quality attribute
+    - consistency
+    - microservice
+    - database
+    - storage
+    - messaging
+    - queue
+    - event
+    - scaling
+    - availability
+    - reliability
+    - security
+    - resilience
+    - multi-tenancy
+    - performance
+    - cache

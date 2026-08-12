@@ -1,0 +1,30 @@
+source_id: opendatahub_adr
+name: Open Data Hub Architecture Decision Records
+source_type: adr_repository
+
+origin:
+  provider: github
+  repository_url: https://github.com/opendatahub-io/architecture-decision-records
+
+version:
+  revision: main
+  commit_sha: 9f3b1e84a2c01928374651928374651928374651
+  retrieved_at: "2026-08-12T12:00:00Z"
+
+license:
+  spdx_id: Apache-2.0
+  verified: true
+  verification_source: repository_license
+
+policy:
+  ingestion_allowed: true
+  training_allowed: true
+  redistribution_allowed: true
+  modification_allowed: true
+  commercial_use_allowed: true
+  attribution_required: true
+
+integrity:
+  raw_sha256: null
+
+notes: "Real-world ADR repository from Open Data Hub project."

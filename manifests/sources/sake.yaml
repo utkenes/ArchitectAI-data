@@ -1,0 +1,30 @@
+source_id: sake
+name: SAKE Architecture Knowledge Benchmark
+source_type: eval_benchmark
+
+origin:
+  provider: benchmark_repository
+  repository_url: https://github.com/eval/sake
+
+version:
+  release_version: v1.0
+  retrieved_at: "2026-08-12T12:00:00Z"
+
+license:
+  spdx_id: CC-BY-4.0
+  verified: true
+  verification_source: dataset_card
+
+policy:
+  ingestion_allowed: true
+  training_allowed: false
+  evaluation_only: true
+  redistribution_allowed: false
+  modification_allowed: false
+  commercial_use_allowed: false
+  attribution_required: true
+
+integrity:
+  raw_sha256: null
+
+notes: "Protected evaluation benchmark. Must never leak into training data classes."

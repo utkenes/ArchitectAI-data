@@ -1,0 +1,19 @@
+split_manifest_id: r2abench_v1
+source_id: r2abench
+seed: 42
+
+train_projects:
+  - proj_001_ecommerce
+  - proj_002_banking
+  - proj_003_hospital
+  - proj_004_logistics
+  - proj_005_iot_telemetry
+
+validation_projects:
+  - proj_006_social_network
+  - proj_007_ride_sharing
+
+held_out_projects:
+  - proj_008_flight_booking
+  - proj_009_telemed_video
+  - proj_010_smart_grid

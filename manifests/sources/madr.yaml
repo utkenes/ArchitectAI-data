@@ -1,0 +1,30 @@
+source_id: madr
+name: Markdown Architectural Decision Records
+source_type: adr_template_repository
+
+origin:
+  provider: github
+  repository_url: https://github.com/adr/madr
+
+version:
+  revision: main
+  commit_sha: e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9
+  retrieved_at: "2026-08-12T12:00:00Z"
+
+license:
+  spdx_id: MIT
+  verified: true
+  verification_source: repository_license
+
+policy:
+  ingestion_allowed: true
+  training_allowed: true
+  redistribution_allowed: true
+  modification_allowed: true
+  commercial_use_allowed: true
+  attribution_required: true
+
+integrity:
+  raw_sha256: null
+
+notes: "MADR format templates and example architectural decision records."
