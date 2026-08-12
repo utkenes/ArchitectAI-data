@@ -5,10 +5,21 @@ MADR (Markdown Architectural Decision Records) Parser
 import re
 from pathlib import Path
 from typing import Any
-
 from architectai_dataset_builder.parsers.base import BaseParser
 from architectai_dataset_builder.utils.hashing import compute_sha256_file
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
+
+BOILERPLATE_FILENAMES = {
+    "readme.md",
+    "changelog.md",
+    "contributing.md",
+    "index.md",
+    "examples.md",
+    "tooling.md",
+    "adr-template.md",
+    "template.md",
+    "license.md",
+}
 
 
 class MADRParser(BaseParser):
@@ -17,15 +28,33 @@ class MADRParser(BaseParser):
 
     def parse_directory(self, raw_dir: Path) -> list[dict[str, Any]]:
         records = []
-        for file_path in sorted(raw_dir.glob("*.md")):
-            if file_path.is_file():
-                record = self._parse_file(file_path)
-                if record:
-                    records.append(record)
+        for file_path in sorted(raw_dir.rglob("*.md")):
+            if not file_path.is_file() or file_path.name.startswith("."):
+                continue
+
+            # Check if file is a non-ADR template or documentation boilerplate
+            if file_path.name.lower() in BOILERPLATE_FILENAMES:
+                records.append(
+                    {
+                        "sample_id": f"quarantine_{file_path.stem}",
+                        "source_id": self.source_id,
+                        "file_name": file_path.name,
+                        "record_id": file_path.stem,
+                        "raw_sha256": compute_sha256_file(file_path),
+                        "is_quarantined": True,
+                        "quarantine_reason": "boilerplate_or_template",
+                        "raw_text": file_path.read_text(encoding="utf-8", errors="ignore"),
+                    }
+                )
+                continue
+
+            record = self._parse_file(file_path)
+            if record:
+                records.append(record)
         return records
 
     def _parse_file(self, file_path: Path) -> dict[str, Any]:
-        text = file_path.read_text(encoding="utf-8")
+        text = file_path.read_text(encoding="utf-8", errors="ignore")
         raw_hash = compute_sha256_file(file_path)
 
         title_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
@@ -59,6 +88,7 @@ class MADRParser(BaseParser):
             "positive_consequences": [p.strip("- *") for p in pos_consequences.split("\n") if p.strip("- *")],
             "negative_consequences": [n.strip("- *") for n in neg_consequences.split("\n") if n.strip("- *")],
             "raw_text": text,
+            "is_quarantined": False,
         }
 
     def _extract_section(self, text: str, header_regex: str, next_header_regex: str) -> str:
