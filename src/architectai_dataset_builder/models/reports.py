@@ -2,6 +2,7 @@
 Dataset Quality, Contamination, and Statistics Report Models
 """
 
+from typing import Field
 from pydantic import BaseModel, Field
 
 
@@ -21,6 +22,8 @@ class ContaminationReport(BaseModel):
 
 
 class DatasetStatsReport(BaseModel):
+    source_mode: str = "production"
+    build_status: str = "PRODUCTION_RELEASE"
     total_samples: int
     sample_count_by_split: dict[str, int]
     sample_count_by_source: dict[str, int]
@@ -30,4 +33,6 @@ class DatasetStatsReport(BaseModel):
     duplicate_count: int
     near_duplicate_count: int
     quarantine_count: int
+    quarantine_reasons: dict[str, int] = Field(default_factory=dict)
+    failed_parse_count: int = 0
     review_status_distribution: dict[str, int]

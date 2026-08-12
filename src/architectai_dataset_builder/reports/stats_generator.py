@@ -4,7 +4,6 @@ Dataset Statistics Generator
 
 from collections import Counter
 from pathlib import Path
-
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.models.reports import DatasetStatsReport
 from architectai_dataset_builder.utils.io import write_jsonl
@@ -18,6 +17,10 @@ class StatsGenerator:
         exact_dups: int,
         near_dups: int,
         quarantine_count: int,
+        quarantine_reasons: dict[str, int],
+        failed_parse_count: int,
+        source_mode: str,
+        build_status: str,
         output_file: Path,
     ) -> DatasetStatsReport:
         all_samples = train_samples + val_samples
@@ -30,6 +33,8 @@ class StatsGenerator:
         review_counts = Counter([s.review.status.value for s in all_samples])
 
         report = DatasetStatsReport(
+            source_mode=source_mode,
+            build_status=build_status,
             total_samples=len(all_samples),
             sample_count_by_split=dict(split_counts),
             sample_count_by_source=dict(source_counts),
@@ -39,6 +44,8 @@ class StatsGenerator:
             duplicate_count=exact_dups,
             near_duplicate_count=near_dups,
             quarantine_count=quarantine_count,
+            quarantine_reasons=quarantine_reasons,
+            failed_parse_count=failed_parse_count,
             review_status_distribution=dict(review_counts),
         )
 

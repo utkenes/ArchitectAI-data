@@ -2,7 +2,8 @@
 ArchitectAI Dataset Builder Command Line Interface
 """
 
-
+from collections import Counter
+from pathlib import Path
 import click
 
 from architectai_dataset_builder.config import Config
@@ -19,7 +20,7 @@ from architectai_dataset_builder.parsers.training.madr import MADRParser
 from architectai_dataset_builder.parsers.training.opendatahub_adr import OpenDataHubADRParser
 from architectai_dataset_builder.parsers.training.r2abench import R2ABenchParser
 from architectai_dataset_builder.reports.stats_generator import StatsGenerator
-from architectai_dataset_builder.sources.downloader import SourceDownloader
+from architectai_dataset_builder.sources.downloader import ProductionSourceUnavailableError, SourceDownloader
 from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.splitters.contamination_checker import ContaminationChecker
 from architectai_dataset_builder.splitters.deterministic_splitter import DeterministicSplitter
@@ -31,11 +32,13 @@ from architectai_dataset_builder.validators.schema_validator import SchemaValida
 @click.group()
 def cli() -> None:
     """ArchitectAI Dataset Builder CLI"""
+    pass
 
 
 @cli.group()
 def sources() -> None:
     """Manage architecture data sources and manifests."""
+    pass
 
 
 @sources.command(name="list")
@@ -64,7 +67,8 @@ def verify_sources() -> None:
 
 @cli.command(name="build")
 @click.option("--build-id", default="build_v1_001", help="Unique build identifier")
-def build_dataset(build_id: str) -> None:
+@click.option("--mode", type=click.Choice(["production", "fixture"]), default="production", help="Build mode")
+def build_dataset(build_id: str, mode: str) -> None:
     """Execute end-to-end dataset build pipeline."""
     cfg = Config()
     registry = SourceRegistry(cfg.manifests_dir)
@@ -79,22 +83,37 @@ def build_dataset(build_id: str) -> None:
     deduplicator = Deduplicator(jaccard_threshold=cfg.near_dedup_jaccard_threshold)
     splitter = DeterministicSplitter(cfg.manifests_dir / "splits" / "r2abench_v1.yaml")
 
-    click.echo(f"=== Starting ArchitectAI Dataset Build: {build_id} ===")
+    click.echo(f"=== Starting ArchitectAI Dataset Build: {build_id} (Mode: {mode}) ===")
 
-    # 1. Bootstrap / Fetch Raw Sources
+    # 1. Fetch Sources
     sources_to_ingest = ["opendatahub_adr", "madr", "r2abench", "sake", "cake", "archbench"]
-    for sid in sources_to_ingest:
-        downloader.fetch_source(sid)
-    click.echo("[OK] Raw sources immutably verified.")
+    source_fetch_modes = {}
 
-    # 2. Parse & Ingest Training Sources
+    for sid in sources_to_ingest:
+        try:
+            downloader.fetch_source(sid, mode=mode)
+            source_fetch_modes[sid] = mode
+        except ProductionSourceUnavailableError as e:
+            if mode == "production":
+                click.echo(f"CRITICAL ERROR: {e}")
+                raise e
+            downloader.fetch_source(sid, mode="fixture")
+            source_fetch_modes[sid] = "fixture"
+
+    actual_source_mode = "production" if all(m == "production" for m in source_fetch_modes.values()) else "fixture"
+    build_status = "PRODUCTION_RELEASE" if actual_source_mode == "production" else "DEGRADED_FIXTURE_BUILD"
+
+    click.echo(f"[OK] Sources fetched. Effective Source Mode: {actual_source_mode} | Build Status: {build_status}")
+
+    # 2. Parse Training Sources
     raw_madr_records = MADRParser().parse_directory(cfg.data_dir / "raw" / "madr")
     raw_odh_records = OpenDataHubADRParser().parse_directory(cfg.data_dir / "raw" / "opendatahub_adr")
     raw_r2a_records = R2ABenchParser().parse_directory(cfg.data_dir / "raw" / "r2abench")
 
     # 3. Normalize & Filter Relevance / License Gating
     parsed_samples = []
-    quarantine_count = 0
+    quarantine_reasons = Counter()
+    failed_parse_count = 0
 
     madr_manifest = registry.get_manifest("madr")
     odh_manifest = registry.get_manifest("opendatahub_adr")
@@ -104,37 +123,39 @@ def build_dataset(build_id: str) -> None:
     assert odh_manifest is not None
     assert r2a_manifest is not None
 
-    for r in raw_madr_records:
-        if relevance_filter.is_relevant(r["raw_text"]):
-            parsed_samples.append(normalizer.normalize(r, madr_manifest))
-        else:
-            quarantine_count += 1
+    def process_records(records, manifest):
+        nonlocal failed_parse_count
+        for r in records:
+            if r.get("is_quarantined"):
+                quarantine_reasons[r.get("quarantine_reason", "unknown")] += 1
+                continue
 
-    for r in raw_odh_records:
-        if relevance_filter.is_relevant(r["raw_text"]):
-            parsed_samples.append(normalizer.normalize(r, odh_manifest))
-        else:
-            quarantine_count += 1
+            try:
+                if relevance_filter.is_relevant(r.get("raw_text", "")):
+                    parsed_samples.append(normalizer.normalize(r, manifest))
+                else:
+                    quarantine_reasons["low_relevance"] += 1
+            except Exception:
+                failed_parse_count += 1
 
-    for r in raw_r2a_records:
-        if relevance_filter.is_relevant(r["raw_text"]):
-            parsed_samples.append(normalizer.normalize(r, r2a_manifest))
-        else:
-            quarantine_count += 1
+    process_records(raw_madr_records, madr_manifest)
+    process_records(raw_odh_records, odh_manifest)
+    process_records(raw_r2a_records, r2a_manifest)
 
-    click.echo(f"[OK] Normalized {len(parsed_samples)} training candidates ({quarantine_count} quarantined).")
+    quarantine_count = sum(quarantine_reasons.values())
+    click.echo(f"[OK] Parsed candidates: {len(parsed_samples)} | Quarantined: {quarantine_count} | Parse Errors: {failed_parse_count}")
 
     # 4. License Gating & Schema Validation
     valid_samples = []
     for s in parsed_samples:
         if license_gating.validate_sample(s):
-            is_valid, _ = schema_validator.validate(s)
+            is_valid, errs = schema_validator.validate(s)
             if is_valid:
                 valid_samples.append(s)
             else:
-                quarantine_count += 1
+                quarantine_reasons["schema_validation_failed"] += 1
         else:
-            quarantine_count += 1
+            quarantine_reasons["unverified_license"] += 1
 
     click.echo(f"[OK] License gating & schema validation passed for {len(valid_samples)} samples.")
 
@@ -183,7 +204,11 @@ def build_dataset(build_id: str) -> None:
         val_samples,
         exact_dups,
         near_dups,
-        quarantine_count,
+        sum(quarantine_reasons.values()),
+        dict(quarantine_reasons),
+        failed_parse_count,
+        actual_source_mode,
+        build_status,
         cfg.data_dir / "exports" / "dataset_stats.json",
     )
 
@@ -204,7 +229,7 @@ def build_dataset(build_id: str) -> None:
         output_file=cfg.data_dir / "exports" / "build_manifest.json",
     )
 
-    click.echo("=== Build Completed Successfully! ===")
+    click.echo(f"=== Build Completed: {build_status} ===")
 
 
 if __name__ == "__main__":
