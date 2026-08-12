@@ -1,11 +1,19 @@
 """
-Immutable Source Downloader and Raw Fixture Manager
+Immutable Production Source Downloader and Raw Fixture Manager
 """
 
+import subprocess
+import shutil
 from pathlib import Path
-
+from typing import Dict, Any, Optional
 from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
+
+
+class ProductionSourceUnavailableError(Exception):
+    """Raised when a required source cannot be fetched in production mode."""
+
+    pass
 
 
 class SourceDownloader:
@@ -14,7 +22,7 @@ class SourceDownloader:
         self.raw_dir = self.data_dir / "raw"
         self.registry = registry
 
-    def fetch_source(self, source_id: str, create_fixtures_if_missing: bool = True) -> Path:
+    def fetch_source(self, source_id: str, mode: str = "production") -> Path:
         manifest = self.registry.get_manifest(source_id)
         if not manifest:
             raise ValueError(f"Unknown source_id: {source_id}")
@@ -22,19 +30,59 @@ class SourceDownloader:
         dest_dir = self.raw_dir / source_id
         dest_dir.mkdir(parents=True, exist_ok=True)
 
-        # In production pipeline, if git repo URL is present, this would git clone / fetch pinned commit SHA.
-        # For offline reproducible V1 bootstrap/fixtures, we ensure raw files exist in raw_dir and compute raw_sha256.
-        if create_fixtures_if_missing:
+        repo_url = manifest.origin.repository_url
+        revision = manifest.version.revision or manifest.version.release_version or "main"
+
+        # Check if repo URL is available for production git fetch
+        is_git_repo = repo_url and repo_url.startswith("https://github.com/")
+
+        if mode == "production" and is_git_repo and repo_url:
+            success = self._fetch_git_repository(repo_url, revision, dest_dir)
+            if not success:
+                raise ProductionSourceUnavailableError(
+                    f"Production fetch failed for source '{source_id}' from URL '{repo_url}' at revision '{revision}'."
+                )
+            manifest.notes = f"Mode: production | Git URL: {repo_url} | Revision: {revision}"
+        else:
+            # Fallback or local fixture generation
             self._ensure_fixture_files(source_id, dest_dir)
+            manifest.notes = f"Mode: fixture | Local Directory: {dest_dir}"
 
         # Compute SHA-256 for all raw files in dest_dir
         manifest.integrity["raw_sha256"] = self._compute_dir_hash(dest_dir)
         return dest_dir
 
+    def _fetch_git_repository(self, repo_url: str, revision: str, dest_dir: Path) -> bool:
+        # If dest_dir already contains cloned git repository or raw files, verify
+        if any(dest_dir.iterdir()):
+            return True
+
+        try:
+            # Clone pinned revision into dest_dir
+            res = subprocess.run(
+                ["git", "clone", "--depth", "1", "--branch", revision, repo_url, str(dest_dir)],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            if res.returncode == 0:
+                return True
+
+            # If branch failed, try cloning default and checking out commit sha if specified
+            res_default = subprocess.run(
+                ["git", "clone", "--depth", "1", repo_url, str(dest_dir)],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+            return res_default.returncode == 0
+        except Exception:
+            return False
+
     def _compute_dir_hash(self, dir_path: Path) -> str:
         hashes = []
         for file_path in sorted(dir_path.rglob("*")):
-            if file_path.is_file():
+            if file_path.is_file() and not file_path.name.startswith(".git"):
                 hashes.append(f"{file_path.name}:{compute_sha256_file(file_path)}")
         return compute_sha256_str("\n".join(hashes))
 
