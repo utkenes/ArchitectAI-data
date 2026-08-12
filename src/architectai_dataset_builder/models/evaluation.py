@@ -2,7 +2,6 @@
 Evaluation-Specific Schemas Isolated from Canonical Training Schema
 """
 
-from typing import List, Dict, Optional, Any
 from pydantic import BaseModel, Field
 
 
@@ -20,10 +19,10 @@ class MultipleChoiceEvalSample(BaseModel):
     id: str
     source: EvalSourceMetadata
     question: str
-    options: Dict[str, str]
+    options: dict[str, str]
     correct_answer: str
-    explanation: Optional[str] = None
-    taxonomy_category: Optional[str] = None
+    explanation: str | None = None
+    taxonomy_category: str | None = None
 
 
 class FreeResponseEvalSample(BaseModel):
@@ -31,16 +30,16 @@ class FreeResponseEvalSample(BaseModel):
     source: EvalSourceMetadata
     prompt: str
     reference_answer: str
-    grading_rubric: List[str] = Field(default_factory=list)
-    context: Optional[str] = None
+    grading_rubric: list[str] = Field(default_factory=list)
+    context: str | None = None
 
 
 class ArchitectureGenerationEvalSample(BaseModel):
     id: str
     source: EvalSourceMetadata
     requirements: str
-    constraints: List[str] = Field(default_factory=list)
-    expected_components: List[str] = Field(default_factory=list)
+    constraints: list[str] = Field(default_factory=list)
+    expected_components: list[str] = Field(default_factory=list)
     reference_solution: str
 
 

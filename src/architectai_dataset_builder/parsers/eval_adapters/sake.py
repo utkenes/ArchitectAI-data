@@ -4,18 +4,21 @@ SAKE Evaluation Adapter -> MultipleChoiceEvalSample
 
 import json
 from pathlib import Path
-from typing import List
-from architectai_dataset_builder.models.evaluation import MultipleChoiceEvalSample, EvalSourceMetadata
-from architectai_dataset_builder.utils.hashing import compute_sha256_str, compute_sha256_file
+
+from architectai_dataset_builder.models.evaluation import (
+    EvalSourceMetadata,
+    MultipleChoiceEvalSample,
+)
+from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
 
 
 class SAKEEvalAdapter:
-    def __init__(self):
+    def __init__(self) -> None:
         self.benchmark_id = "sake"
 
-    def parse_directory(self, raw_dir: Path) -> List[MultipleChoiceEvalSample]:
-        samples = []
+    def parse_directory(self, raw_dir: Path) -> list[MultipleChoiceEvalSample]:
+        samples: list[MultipleChoiceEvalSample] = []
         json_file = raw_dir / "sake_questions.json"
         if not json_file.exists():
             return samples

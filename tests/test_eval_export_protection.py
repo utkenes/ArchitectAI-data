@@ -1,7 +1,14 @@
 import pytest
+
 from architectai_dataset_builder.models.canonical import ArchitectAISample, SourceMetadata
-from architectai_dataset_builder.models.evaluation import MultipleChoiceEvalSample, EvalSourceMetadata
-from architectai_dataset_builder.splitters.contamination_checker import ContaminationChecker, EvaluationLeakageError
+from architectai_dataset_builder.models.evaluation import (
+    EvalSourceMetadata,
+    MultipleChoiceEvalSample,
+)
+from architectai_dataset_builder.splitters.contamination_checker import (
+    ContaminationChecker,
+    EvaluationLeakageError,
+)
 
 
 def test_eval_contamination_detection():

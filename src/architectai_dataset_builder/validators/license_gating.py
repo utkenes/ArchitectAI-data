@@ -21,9 +21,4 @@ class LicenseGatingEngine:
             return False
 
         # 2. Source & License Policy Must Permit Training
-        if not manifest.policy.training_allowed:
-            return False
-        if not manifest.license.policy.training_allowed:
-            return False
-
-        return True
+        return manifest.policy.training_allowed and manifest.license.policy.training_allowed

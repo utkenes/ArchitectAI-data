@@ -4,7 +4,7 @@ Dataset Statistics Generator
 
 from collections import Counter
 from pathlib import Path
-from typing import List, Dict, Any, Union
+
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.models.reports import DatasetStatsReport
 from architectai_dataset_builder.utils.io import write_jsonl
@@ -13,8 +13,8 @@ from architectai_dataset_builder.utils.io import write_jsonl
 class StatsGenerator:
     def generate_stats(
         self,
-        train_samples: List[ArchitectAISample],
-        val_samples: List[ArchitectAISample],
+        train_samples: list[ArchitectAISample],
+        val_samples: list[ArchitectAISample],
         exact_dups: int,
         near_dups: int,
         quarantine_count: int,

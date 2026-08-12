@@ -4,7 +4,7 @@ Deterministic Dataset Splitter and R2ABench Project-Level Split Manager
 
 import random
 from pathlib import Path
-from typing import List, Tuple, Dict, Set
+
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.utils.io import load_yaml
 
@@ -15,7 +15,7 @@ class DeterministicSplitter:
         self.train_ratio = train_ratio
         self.r2abench_splits = self._load_r2abench_manifest(splits_manifest_path)
 
-    def _load_r2abench_manifest(self, path: Path) -> Dict[str, Set[str]]:
+    def _load_r2abench_manifest(self, path: Path) -> dict[str, set[str]]:
         if not path.exists():
             return {"train": set(), "validation": set(), "held_out": set()}
         data = load_yaml(path)
@@ -26,13 +26,13 @@ class DeterministicSplitter:
         }
 
     def split_samples(
-        self, samples: List[ArchitectAISample]
-    ) -> Tuple[List[ArchitectAISample], List[ArchitectAISample]]:
-        train_samples: List[ArchitectAISample] = []
-        val_samples: List[ArchitectAISample] = []
+        self, samples: list[ArchitectAISample]
+    ) -> tuple[list[ArchitectAISample], list[ArchitectAISample]]:
+        train_samples: list[ArchitectAISample] = []
+        val_samples: list[ArchitectAISample] = []
 
         # Separate R2ABench project-level splits from general random splits
-        generic_samples: List[ArchitectAISample] = []
+        generic_samples: list[ArchitectAISample] = []
 
         for sample in samples:
             if sample.source.source_id == "r2abench":

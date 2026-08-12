@@ -3,7 +3,7 @@ Evidence & Provenance Tracking Models
 """
 
 from enum import Enum
-from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -19,12 +19,12 @@ class EvidenceItem(BaseModel):
     evidence_type: EvidenceType = Field(
         default=EvidenceType.UNKNOWN, description="Source grounding type"
     )
-    source_span: Optional[str] = Field(
+    source_span: str | None = Field(
         default=None, description="Exact substring span from raw source"
     )
-    confidence: Optional[float] = Field(
+    confidence: float | None = Field(
         default=None, description="Confidence score if derived/inferred"
     )
-    inference_rule: Optional[str] = Field(
+    inference_rule: str | None = Field(
         default=None, description="Identifier of normalizer rule applied"
     )

@@ -2,12 +2,13 @@
 Build Manifest Exporter
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
+
 from architectai_dataset_builder.models.manifest import BuildManifest
-from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
-from architectai_dataset_builder.utils.io import save_yaml, write_jsonl
+from architectai_dataset_builder.utils.hashing import compute_sha256_file
+from architectai_dataset_builder.utils.io import write_jsonl
 
 
 class BuildManifestExporter:
@@ -16,9 +17,9 @@ class BuildManifestExporter:
         build_id: str,
         config_dir: Path,
         split_manifest_path: Path,
-        sources_summary: Dict[str, Dict[str, Any]],
-        sample_counts: Dict[str, int],
-        export_paths: Dict[str, Path],
+        sources_summary: dict[str, dict[str, Any]],
+        sample_counts: dict[str, int],
+        export_paths: dict[str, Path],
         output_file: Path,
     ) -> BuildManifest:
         config_hash = compute_sha256_file(config_dir / "dataset_policy.yaml")
@@ -33,7 +34,7 @@ class BuildManifestExporter:
             dataset_version="1.0.0",
             builder_version="0.1.0",
             build_id=build_id,
-            build_timestamp=datetime.now(timezone.utc).isoformat(),
+            build_timestamp=datetime.now(UTC).isoformat(),
             config_hash=config_hash,
             split_manifest_hash=split_hash,
             sources=sources_summary,

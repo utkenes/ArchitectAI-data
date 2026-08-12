@@ -2,12 +2,12 @@
 Canonical Schema Completeness & Structural Validator
 """
 
-from typing import List, Tuple
+
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 
 
 class SchemaValidator:
-    def validate(self, sample: ArchitectAISample) -> Tuple[bool, List[str]]:
+    def validate(self, sample: ArchitectAISample) -> tuple[bool, list[str]]:
         errors = []
 
         if not sample.id or not sample.id.startswith("arch_"):

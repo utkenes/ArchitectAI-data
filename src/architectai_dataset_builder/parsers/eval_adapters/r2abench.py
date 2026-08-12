@@ -3,18 +3,18 @@ R2ABench Evaluation Adapter -> DiagramEvalSample (for Held-Out Projects)
 """
 
 from pathlib import Path
-from typing import List, Set
+
 from architectai_dataset_builder.models.evaluation import DiagramEvalSample, EvalSourceMetadata
-from architectai_dataset_builder.utils.hashing import compute_sha256_str, compute_sha256_file
+from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
 
 
 class R2ABenchEvalAdapter:
-    def __init__(self, held_out_project_ids: Set[str]):
+    def __init__(self, held_out_project_ids: set[str]):
         self.benchmark_id = "r2abench_holdout"
         self.held_out_project_ids = held_out_project_ids
 
-    def parse_directory(self, raw_dir: Path) -> List[DiagramEvalSample]:
+    def parse_directory(self, raw_dir: Path) -> list[DiagramEvalSample]:
         samples = []
         req_files = sorted(raw_dir.glob("*_req.txt")) + sorted(raw_dir.glob("*.txt"))
         for req_file in req_files:

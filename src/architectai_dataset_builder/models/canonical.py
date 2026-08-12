@@ -3,8 +3,9 @@ Canonical ArchitectAI Training Sample Models
 """
 
 from enum import Enum
-from typing import List, Optional
+
 from pydantic import BaseModel, Field
+
 from architectai_dataset_builder.models.evidence import EvidenceItem
 
 
@@ -31,20 +32,20 @@ class ReviewStatus(str, Enum):
 
 class ReviewInfo(BaseModel):
     status: ReviewStatus = ReviewStatus.UNREVIEWED
-    reviewer: Optional[str] = None
-    notes: List[str] = Field(default_factory=list)
-    quality_score: Optional[float] = None
+    reviewer: str | None = None
+    notes: list[str] = Field(default_factory=list)
+    quality_score: float | None = None
 
 
 class SourceMetadata(BaseModel):
     source_id: str
     source_name: str
-    source_url: Optional[str] = None
-    source_version: Optional[str] = None
-    source_commit_sha: Optional[str] = None
+    source_url: str | None = None
+    source_version: str | None = None
+    source_commit_sha: str | None = None
     source_file_path: str
     source_record_id: str
-    project_id: Optional[str] = None
+    project_id: str | None = None
     provenance_type: str = "real_world"
     license_id: str
     license_verified: bool = False
@@ -52,29 +53,29 @@ class SourceMetadata(BaseModel):
     normalized_sha256: str
     parser_version: str = "0.1.0"
     normalizer_version: str = "0.1.0"
-    split: Optional[str] = None
-    split_reason: Optional[str] = None
+    split: str | None = None
+    split_reason: str | None = None
     created_at: str
 
 
 class Alternative(BaseModel):
     option: str
-    advantages: List[EvidenceItem] = Field(default_factory=list)
-    disadvantages: List[EvidenceItem] = Field(default_factory=list)
-    why_rejected: Optional[EvidenceItem] = None
+    advantages: list[EvidenceItem] = Field(default_factory=list)
+    disadvantages: list[EvidenceItem] = Field(default_factory=list)
+    why_rejected: EvidenceItem | None = None
 
 
 class RecommendedArchitecture(BaseModel):
     summary: str
-    style: Optional[str] = None
-    components: List[str] = Field(default_factory=list)
+    style: str | None = None
+    components: list[str] = Field(default_factory=list)
 
 
 class FailureMode(BaseModel):
     failure: str
     impact: str
     mitigation: str
-    recovery: Optional[str] = None
+    recovery: str | None = None
 
 
 class ArchitectAISample(BaseModel):
@@ -83,38 +84,38 @@ class ArchitectAISample(BaseModel):
     scenario: str
     task_type: TaskType = TaskType.ADR_REASONING
     
-    facts: List[EvidenceItem] = Field(default_factory=list)
-    assumptions: List[EvidenceItem] = Field(default_factory=list)
+    facts: list[EvidenceItem] = Field(default_factory=list)
+    assumptions: list[EvidenceItem] = Field(default_factory=list)
     
-    architecture_drivers: List[EvidenceItem] = Field(default_factory=list)
-    constraints: List[EvidenceItem] = Field(default_factory=list)
-    quality_attributes: List[EvidenceItem] = Field(default_factory=list)
-    invariants: List[EvidenceItem] = Field(default_factory=list)
+    architecture_drivers: list[EvidenceItem] = Field(default_factory=list)
+    constraints: list[EvidenceItem] = Field(default_factory=list)
+    quality_attributes: list[EvidenceItem] = Field(default_factory=list)
+    invariants: list[EvidenceItem] = Field(default_factory=list)
     
-    recommended_architecture: Optional[RecommendedArchitecture] = None
-    alternatives: List[Alternative] = Field(default_factory=list)
+    recommended_architecture: RecommendedArchitecture | None = None
+    alternatives: list[Alternative] = Field(default_factory=list)
     
-    decisions: List[EvidenceItem] = Field(default_factory=list)
-    tradeoffs: List[EvidenceItem] = Field(default_factory=list)
-    failure_modes: List[FailureMode] = Field(default_factory=list)
+    decisions: list[EvidenceItem] = Field(default_factory=list)
+    tradeoffs: list[EvidenceItem] = Field(default_factory=list)
+    failure_modes: list[FailureMode] = Field(default_factory=list)
     
-    consistency_semantics: List[EvidenceItem] = Field(default_factory=list)
-    data_ownership: List[EvidenceItem] = Field(default_factory=list)
-    source_of_truth: List[EvidenceItem] = Field(default_factory=list)
+    consistency_semantics: list[EvidenceItem] = Field(default_factory=list)
+    data_ownership: list[EvidenceItem] = Field(default_factory=list)
+    source_of_truth: list[EvidenceItem] = Field(default_factory=list)
     
-    security_considerations: List[EvidenceItem] = Field(default_factory=list)
-    multi_tenancy: List[EvidenceItem] = Field(default_factory=list)
-    scaling_considerations: List[EvidenceItem] = Field(default_factory=list)
-    operational_considerations: List[EvidenceItem] = Field(default_factory=list)
+    security_considerations: list[EvidenceItem] = Field(default_factory=list)
+    multi_tenancy: list[EvidenceItem] = Field(default_factory=list)
+    scaling_considerations: list[EvidenceItem] = Field(default_factory=list)
+    operational_considerations: list[EvidenceItem] = Field(default_factory=list)
     
-    metrics: List[EvidenceItem] = Field(default_factory=list)
-    evolution_triggers: List[EvidenceItem] = Field(default_factory=list)
+    metrics: list[EvidenceItem] = Field(default_factory=list)
+    evolution_triggers: list[EvidenceItem] = Field(default_factory=list)
     
-    recommended_now: List[EvidenceItem] = Field(default_factory=list)
-    add_when_needed: List[EvidenceItem] = Field(default_factory=list)
-    avoid_for_now: List[EvidenceItem] = Field(default_factory=list)
+    recommended_now: list[EvidenceItem] = Field(default_factory=list)
+    add_when_needed: list[EvidenceItem] = Field(default_factory=list)
+    avoid_for_now: list[EvidenceItem] = Field(default_factory=list)
     
-    confidence: Optional[float] = None
-    final_answer: Optional[str] = None
+    confidence: float | None = None
+    final_answer: str | None = None
     
     review: ReviewInfo = Field(default_factory=ReviewInfo)

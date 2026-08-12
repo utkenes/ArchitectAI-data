@@ -2,7 +2,6 @@
 Exact Duplicate and N-Gram Jaccard Near-Duplicate Detection Engine
 """
 
-from typing import List, Set, Tuple, Dict
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 
 
@@ -11,7 +10,7 @@ class Deduplicator:
         self.jaccard_threshold = jaccard_threshold
         self.ngram_size = ngram_size
 
-    def _get_ngrams(self, text: str) -> Set[str]:
+    def _get_ngrams(self, text: str) -> set[str]:
         tokens = text.lower().split()
         if len(tokens) < self.ngram_size:
             return set(tokens)
@@ -27,11 +26,11 @@ class Deduplicator:
         return len(intersection) / len(union)
 
     def process_samples(
-        self, samples: List[ArchitectAISample]
-    ) -> Tuple[List[ArchitectAISample], int, int]:
-        unique_samples: List[ArchitectAISample] = []
-        seen_exact_hashes: Set[str] = set()
-        seen_texts: List[Tuple[str, str]] = []  # (id, text)
+        self, samples: list[ArchitectAISample]
+    ) -> tuple[list[ArchitectAISample], int, int]:
+        unique_samples: list[ArchitectAISample] = []
+        seen_exact_hashes: set[str] = set()
+        seen_texts: list[tuple[str, str]] = []  # (id, text)
 
         exact_dups = 0
         near_dups = 0

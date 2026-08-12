@@ -3,7 +3,7 @@ Immutable Source Downloader and Raw Fixture Manager
 """
 
 from pathlib import Path
-from typing import Dict, Any
+
 from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
 

@@ -2,41 +2,40 @@
 ArchitectAI Dataset Builder Command Line Interface
 """
 
+
 import click
-from pathlib import Path
+
 from architectai_dataset_builder.config import Config
-from architectai_dataset_builder.sources.registry import SourceRegistry
-from architectai_dataset_builder.sources.downloader import SourceDownloader
+from architectai_dataset_builder.dedup.deduplicator import Deduplicator
+from architectai_dataset_builder.exporters.build_manifest_exporter import BuildManifestExporter
+from architectai_dataset_builder.exporters.jsonl_exporter import JSONLExporter
+from architectai_dataset_builder.normalizers.canonical_normalizer import CanonicalNormalizer
+from architectai_dataset_builder.normalizers.relevance_filter import RelevanceFilter
+from architectai_dataset_builder.parsers.eval_adapters.archbench import ArchBenchEvalAdapter
+from architectai_dataset_builder.parsers.eval_adapters.cake import CAKEEvalAdapter
+from architectai_dataset_builder.parsers.eval_adapters.r2abench import R2ABenchEvalAdapter
+from architectai_dataset_builder.parsers.eval_adapters.sake import SAKEEvalAdapter
 from architectai_dataset_builder.parsers.training.madr import MADRParser
 from architectai_dataset_builder.parsers.training.opendatahub_adr import OpenDataHubADRParser
 from architectai_dataset_builder.parsers.training.r2abench import R2ABenchParser
-from architectai_dataset_builder.parsers.eval_adapters.sake import SAKEEvalAdapter
-from architectai_dataset_builder.parsers.eval_adapters.cake import CAKEEvalAdapter
-from architectai_dataset_builder.parsers.eval_adapters.archbench import ArchBenchEvalAdapter
-from architectai_dataset_builder.parsers.eval_adapters.r2abench import R2ABenchEvalAdapter
-from architectai_dataset_builder.normalizers.canonical_normalizer import CanonicalNormalizer
-from architectai_dataset_builder.normalizers.relevance_filter import RelevanceFilter
+from architectai_dataset_builder.reports.stats_generator import StatsGenerator
+from architectai_dataset_builder.sources.downloader import SourceDownloader
+from architectai_dataset_builder.sources.registry import SourceRegistry
+from architectai_dataset_builder.splitters.contamination_checker import ContaminationChecker
+from architectai_dataset_builder.splitters.deterministic_splitter import DeterministicSplitter
+from architectai_dataset_builder.utils.io import load_yaml, write_jsonl
 from architectai_dataset_builder.validators.license_gating import LicenseGatingEngine
 from architectai_dataset_builder.validators.schema_validator import SchemaValidator
-from architectai_dataset_builder.dedup.deduplicator import Deduplicator
-from architectai_dataset_builder.splitters.deterministic_splitter import DeterministicSplitter
-from architectai_dataset_builder.splitters.contamination_checker import ContaminationChecker
-from architectai_dataset_builder.exporters.jsonl_exporter import JSONLExporter
-from architectai_dataset_builder.exporters.build_manifest_exporter import BuildManifestExporter
-from architectai_dataset_builder.reports.stats_generator import StatsGenerator
-from architectai_dataset_builder.utils.io import load_yaml, write_jsonl
 
 
 @click.group()
 def cli() -> None:
     """ArchitectAI Dataset Builder CLI"""
-    pass
 
 
 @cli.group()
 def sources() -> None:
     """Manage architecture data sources and manifests."""
-    pass
 
 
 @sources.command(name="list")
@@ -86,7 +85,7 @@ def build_dataset(build_id: str) -> None:
     sources_to_ingest = ["opendatahub_adr", "madr", "r2abench", "sake", "cake", "archbench"]
     for sid in sources_to_ingest:
         downloader.fetch_source(sid)
-    click.echo("✓ Raw sources immutably verified.")
+    click.echo("[OK] Raw sources immutably verified.")
 
     # 2. Parse & Ingest Training Sources
     raw_madr_records = MADRParser().parse_directory(cfg.data_dir / "raw" / "madr")
@@ -100,6 +99,10 @@ def build_dataset(build_id: str) -> None:
     madr_manifest = registry.get_manifest("madr")
     odh_manifest = registry.get_manifest("opendatahub_adr")
     r2a_manifest = registry.get_manifest("r2abench")
+
+    assert madr_manifest is not None
+    assert odh_manifest is not None
+    assert r2a_manifest is not None
 
     for r in raw_madr_records:
         if relevance_filter.is_relevant(r["raw_text"]):
@@ -119,7 +122,7 @@ def build_dataset(build_id: str) -> None:
         else:
             quarantine_count += 1
 
-    click.echo(f"✓ Normalized {len(parsed_samples)} training candidates ({quarantine_count} quarantined).")
+    click.echo(f"[OK] Normalized {len(parsed_samples)} training candidates ({quarantine_count} quarantined).")
 
     # 4. License Gating & Schema Validation
     valid_samples = []
@@ -133,15 +136,15 @@ def build_dataset(build_id: str) -> None:
         else:
             quarantine_count += 1
 
-    click.echo(f"✓ License gating & schema validation passed for {len(valid_samples)} samples.")
+    click.echo(f"[OK] License gating & schema validation passed for {len(valid_samples)} samples.")
 
     # 5. Deduplication
     unique_samples, exact_dups, near_dups = deduplicator.process_samples(valid_samples)
-    click.echo(f"✓ Deduplication: {len(unique_samples)} unique ({exact_dups} exact dups, {near_dups} near dups).")
+    click.echo(f"[OK] Deduplication: {len(unique_samples)} unique ({exact_dups} exact dups, {near_dups} near dups).")
 
     # 6. Deterministic Splitting
     train_samples, val_samples = splitter.split_samples(unique_samples)
-    click.echo(f"✓ Split: {len(train_samples)} Train, {len(val_samples)} Validation.")
+    click.echo(f"[OK] Split: {len(train_samples)} Train, {len(val_samples)} Validation.")
 
     # 7. Parse Protected Evaluation Benchmarks
     sake_eval = SAKEEvalAdapter().parse_directory(cfg.data_dir / "raw" / "sake")
@@ -152,7 +155,7 @@ def build_dataset(build_id: str) -> None:
     ).parse_directory(cfg.data_dir / "raw" / "r2abench")
 
     eval_samples = sake_eval + cake_eval + archbench_eval + r2a_eval
-    click.echo(f"✓ Ingested {len(eval_samples)} protected evaluation samples.")
+    click.echo(f"[OK] Ingested {len(eval_samples)} protected evaluation samples.")
 
     # 8. Contamination Verification
     checker = ContaminationChecker(
@@ -161,7 +164,7 @@ def build_dataset(build_id: str) -> None:
     )
     contamination_report = checker.verify_no_leakage(train_samples + val_samples, eval_samples)
     write_jsonl([contamination_report.model_dump()], cfg.data_dir / "exports" / "contamination_report.json")
-    click.echo("✓ Contamination Check Passed: 0 cross-split leaks.")
+    click.echo("[OK] Contamination Check Passed: 0 cross-split leaks.")
 
     # 9. Exporters & Manifests
     approved_manifest = load_yaml(cfg.manifests_dir / "reviews" / "approved_samples.yaml")

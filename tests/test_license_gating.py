@@ -1,8 +1,7 @@
-import pytest
 from architectai_dataset_builder.config import Config
+from architectai_dataset_builder.models.canonical import ArchitectAISample, SourceMetadata
 from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.validators.license_gating import LicenseGatingEngine
-from architectai_dataset_builder.models.canonical import ArchitectAISample, SourceMetadata
 
 
 def test_license_gating_verified():

@@ -4,17 +4,18 @@ OpenDataHub Architecture Decision Record (ADR) Parser
 
 import re
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any
+
 from architectai_dataset_builder.parsers.base import BaseParser
 from architectai_dataset_builder.utils.hashing import compute_sha256_file
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
 
 
 class OpenDataHubADRParser(BaseParser):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(source_id="opendatahub_adr")
 
-    def parse_directory(self, raw_dir: Path) -> List[Dict[str, Any]]:
+    def parse_directory(self, raw_dir: Path) -> list[dict[str, Any]]:
         records = []
         for file_path in sorted(raw_dir.glob("*.md")):
             if file_path.is_file():
@@ -23,7 +24,7 @@ class OpenDataHubADRParser(BaseParser):
                     records.append(record)
         return records
 
-    def _parse_file(self, file_path: Path) -> Dict[str, Any]:
+    def _parse_file(self, file_path: Path) -> dict[str, Any]:
         text = file_path.read_text(encoding="utf-8")
         raw_hash = compute_sha256_file(file_path)
 

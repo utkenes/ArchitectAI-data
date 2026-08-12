@@ -1,6 +1,5 @@
-import pytest
-from architectai_dataset_builder.models.canonical import ArchitectAISample, SourceMetadata, TaskType
 from architectai_dataset_builder.exporters.sft_formatter import SFTFormatter
+from architectai_dataset_builder.models.canonical import ArchitectAISample, SourceMetadata, TaskType
 
 
 def test_sft_formatter_grounding():

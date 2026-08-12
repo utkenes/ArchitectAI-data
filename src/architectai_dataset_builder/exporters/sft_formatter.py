@@ -2,7 +2,8 @@
 Evidence-Grounded SFT Formatter (System / User / Assistant Message Converter)
 """
 
-from typing import Dict, Any, List
+from typing import Any
+
 from architectai_dataset_builder.models.canonical import ArchitectAISample, TaskType
 
 
@@ -13,7 +14,7 @@ class SFTFormatter:
             "Analyze project requirements, constraints, and trade-offs to provide grounded architectural decisions."
         )
 
-    def format_sample(self, sample: ArchitectAISample) -> Dict[str, Any]:
+    def format_sample(self, sample: ArchitectAISample) -> dict[str, Any]:
         """Formats a canonical ArchitectAISample into OpenAI/HuggingFace SFT format."""
         
         # Grounded user prompt construction based on evidence-backed task_type

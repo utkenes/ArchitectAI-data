@@ -1,10 +1,8 @@
-import pytest
-from architectai_dataset_builder.models.evaluation import (
-    MultipleChoiceEvalSample,
-    FreeResponseEvalSample,
-    EvalSourceMetadata,
-)
 from architectai_dataset_builder.models.canonical import ArchitectAISample
+from architectai_dataset_builder.models.evaluation import (
+    EvalSourceMetadata,
+    MultipleChoiceEvalSample,
+)
 
 
 def test_eval_schema_isolation():

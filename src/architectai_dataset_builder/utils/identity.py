@@ -3,14 +3,13 @@ Deterministic Stable Sample Identity Generation
 """
 
 import hashlib
-from typing import Optional
 
 
 def generate_stable_sample_id(
     source_id: str,
     file_path: str,
     record_id: str,
-    project_id: Optional[str] = None,
+    project_id: str | None = None,
     prefix: str = "arch_",
 ) -> str:
     """

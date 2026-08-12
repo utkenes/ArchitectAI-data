@@ -3,17 +3,18 @@ R2ABench Requirements and Architecture Diagram Parser
 """
 
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any
+
 from architectai_dataset_builder.parsers.base import BaseParser
 from architectai_dataset_builder.utils.hashing import compute_sha256_file
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
 
 
 class R2ABenchParser(BaseParser):
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__(source_id="r2abench")
 
-    def parse_directory(self, raw_dir: Path) -> List[Dict[str, Any]]:
+    def parse_directory(self, raw_dir: Path) -> list[dict[str, Any]]:
         records = []
         req_files = sorted(raw_dir.glob("*_req.txt")) + sorted(raw_dir.glob("*.txt"))
         for req_file in req_files:

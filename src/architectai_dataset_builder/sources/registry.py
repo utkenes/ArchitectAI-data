@@ -3,25 +3,29 @@ Source Manifest Registry & License Verification Engine
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional
-from architectai_dataset_builder.models.manifest import SourceManifest, LicenseMetadata, LicensePolicy
+
+from architectai_dataset_builder.models.manifest import (
+    LicenseMetadata,
+    LicensePolicy,
+    SourceManifest,
+)
 from architectai_dataset_builder.utils.io import load_yaml
 
 
 class SourceRegistry:
-    def __init__(self, manifests_dir: Path):
+    def __init__(self, manifests_dir: Path) -> None:
         self.manifests_dir = Path(manifests_dir)
         self.sources_dir = self.manifests_dir / "sources"
         self.licenses_file = self.manifests_dir / "licenses" / "license_registry.yaml"
-        
-        self.license_registry: Dict[str, LicenseMetadata] = self._load_license_registry()
-        self.source_manifests: Dict[str, SourceManifest] = self._load_source_manifests()
 
-    def _load_license_registry(self) -> Dict[str, LicenseMetadata]:
+        self.license_registry: dict[str, LicenseMetadata] = self._load_license_registry()
+        self.source_manifests: dict[str, SourceManifest] = self._load_source_manifests()
+
+    def _load_license_registry(self) -> dict[str, LicenseMetadata]:
         if not self.licenses_file.exists():
             return {}
         data = load_yaml(self.licenses_file)
-        licenses = {}
+        licenses: dict[str, LicenseMetadata] = {}
         for spdx_id, raw_lic in data.get("licenses", {}).items():
             licenses[spdx_id] = LicenseMetadata(
                 spdx_id=raw_lic.get("spdx_id", spdx_id),
@@ -31,14 +35,13 @@ class SourceRegistry:
             )
         return licenses
 
-    def _load_source_manifests(self) -> Dict[str, SourceManifest]:
-        manifests = {}
+    def _load_source_manifests(self) -> dict[str, SourceManifest]:
+        manifests: dict[str, SourceManifest] = {}
         if not self.sources_dir.exists():
             return manifests
         for path in self.sources_dir.glob("*.yaml"):
             data = load_yaml(path)
             manifest = SourceManifest(**data)
-            # Cross-reference with license registry policy if present
             lic_spdx = manifest.license.spdx_id
             if lic_spdx in self.license_registry:
                 registry_lic = self.license_registry[lic_spdx]
@@ -47,10 +50,10 @@ class SourceRegistry:
             manifests[manifest.source_id] = manifest
         return manifests
 
-    def get_manifest(self, source_id: str) -> Optional[SourceManifest]:
+    def get_manifest(self, source_id: str) -> SourceManifest | None:
         return self.source_manifests.get(source_id)
 
-    def list_sources(self) -> List[SourceManifest]:
+    def list_sources(self) -> list[SourceManifest]:
         return list(self.source_manifests.values())
 
     def is_training_allowed(self, source_id: str) -> bool:

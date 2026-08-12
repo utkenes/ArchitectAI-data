@@ -1,6 +1,5 @@
-import pytest
-from architectai_dataset_builder.normalizers.task_taxonomy import TaskTaxonomyClassifier
 from architectai_dataset_builder.models.canonical import TaskType
+from architectai_dataset_builder.normalizers.task_taxonomy import TaskTaxonomyClassifier
 
 
 def test_taxonomy_classification_with_evidence():

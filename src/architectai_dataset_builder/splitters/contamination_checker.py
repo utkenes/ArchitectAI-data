@@ -2,52 +2,51 @@
 Contamination Checker & Evaluation Leakage Enforcement Engine
 """
 
-from typing import List, Union, Set
+
+from architectai_dataset_builder.dedup.deduplicator import Deduplicator
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.models.evaluation import (
-    MultipleChoiceEvalSample,
-    FreeResponseEvalSample,
     ArchitectureGenerationEvalSample,
     DiagramEvalSample,
+    FreeResponseEvalSample,
+    MultipleChoiceEvalSample,
 )
 from architectai_dataset_builder.models.reports import ContaminationReport, LeakageDetail
-from architectai_dataset_builder.dedup.deduplicator import Deduplicator
 
-EvalSampleUnion = Union[
-    MultipleChoiceEvalSample,
-    FreeResponseEvalSample,
-    ArchitectureGenerationEvalSample,
-    DiagramEvalSample,
-]
+EvalSampleUnion = (
+    MultipleChoiceEvalSample
+    | FreeResponseEvalSample
+    | ArchitectureGenerationEvalSample
+    | DiagramEvalSample
+)
 
 
 class EvaluationLeakageError(Exception):
     """Raised when an evaluation benchmark sample leaks into a training split."""
 
-    pass
 
 
 class ContaminationChecker:
-    def __init__(self, protected_sources: List[str], jaccard_threshold: float = 0.85):
+    def __init__(self, protected_sources: list[str], jaccard_threshold: float = 0.85):
         self.protected_sources = set(protected_sources)
         self.deduplicator = Deduplicator(jaccard_threshold=jaccard_threshold)
 
     def check_contamination(
         self,
-        training_samples: List[ArchitectAISample],
-        eval_samples: List[EvalSampleUnion],
+        training_samples: list[ArchitectAISample],
+        eval_samples: list[EvalSampleUnion],
     ) -> ContaminationReport:
-        leakage_details: List[LeakageDetail] = []
+        leakage_details: list[LeakageDetail] = []
 
         # Index evaluation samples
-        eval_raw_hashes: Set[str] = set()
-        eval_norm_hashes: Set[str] = set()
-        eval_records: List[Tuple[str, str, str]] = []  # (sample_id, source_id, text)
+        eval_raw_hashes: set[str] = set()
+        eval_norm_hashes: set[str] = set()
+        eval_records: list[tuple[str, str, str]] = []  # (sample_id, source_id, text)
 
         for es in eval_samples:
             eval_raw_hashes.add(es.source.raw_sha256)
             eval_norm_hashes.add(es.source.normalized_sha256)
-            
+
             # Extract text
             if isinstance(es, MultipleChoiceEvalSample):
                 text = f"{es.question} {' '.join(es.options.values())}"
@@ -59,7 +58,7 @@ class ContaminationChecker:
                 text = f"{es.requirements_text} {es.reference_plantuml}"
             else:
                 text = ""
-                
+
             eval_records.append((es.id, es.source.benchmark_id, text))
 
         # Check each training sample against evaluation index
@@ -128,8 +127,8 @@ class ContaminationChecker:
 
     def verify_no_leakage(
         self,
-        training_samples: List[ArchitectAISample],
-        eval_samples: List[EvalSampleUnion],
+        training_samples: list[ArchitectAISample],
+        eval_samples: list[EvalSampleUnion],
     ) -> ContaminationReport:
         report = self.check_contamination(training_samples, eval_samples)
         if report.has_leakage:

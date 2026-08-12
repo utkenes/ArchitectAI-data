@@ -2,11 +2,10 @@
 Architectural Relevance Classifier (Baseline Heuristic Filter)
 """
 
-from typing import Dict, Any, List
 
 
 class RelevanceFilter:
-    def __init__(self, keywords: List[str], min_relevance_score: float = 0.60):
+    def __init__(self, keywords: list[str], min_relevance_score: float = 0.60):
         self.keywords = [k.lower() for k in keywords]
         self.min_relevance_score = min_relevance_score
 

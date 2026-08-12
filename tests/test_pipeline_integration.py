@@ -1,6 +1,5 @@
-import pytest
-from pathlib import Path
 from click.testing import CliRunner
+
 from architectai_dataset_builder.cli import build_dataset
 from architectai_dataset_builder.config import Config
 from architectai_dataset_builder.utils.io import read_jsonl

@@ -3,24 +3,25 @@ JSONL Exporter for Training, Silver, Gold, and Evaluation Datasets
 """
 
 from pathlib import Path
-from typing import List, Dict, Any, Union
+from typing import Any
+
+from architectai_dataset_builder.exporters.sft_formatter import SFTFormatter
 from architectai_dataset_builder.models.canonical import ArchitectAISample, ReviewStatus
 from architectai_dataset_builder.models.evaluation import (
-    MultipleChoiceEvalSample,
-    FreeResponseEvalSample,
     ArchitectureGenerationEvalSample,
     DiagramEvalSample,
+    FreeResponseEvalSample,
+    MultipleChoiceEvalSample,
 )
-from architectai_dataset_builder.exporters.sft_formatter import SFTFormatter
-from architectai_dataset_builder.utils.io import write_jsonl, save_yaml
 from architectai_dataset_builder.utils.hashing import compute_sha256_file
+from architectai_dataset_builder.utils.io import write_jsonl
 
-EvalSampleUnion = Union[
-    MultipleChoiceEvalSample,
-    FreeResponseEvalSample,
-    ArchitectureGenerationEvalSample,
-    DiagramEvalSample,
-]
+EvalSampleUnion = (
+    MultipleChoiceEvalSample
+    | FreeResponseEvalSample
+    | ArchitectureGenerationEvalSample
+    | DiagramEvalSample
+)
 
 
 class JSONLExporter:
@@ -33,25 +34,25 @@ class JSONLExporter:
 
     def export_training_datasets(
         self,
-        train_samples: List[ArchitectAISample],
-        val_samples: List[ArchitectAISample],
-        approved_sample_ids: List[str],
-    ) -> Dict[str, Path]:
+        train_samples: list[ArchitectAISample],
+        val_samples: list[ArchitectAISample],
+        approved_sample_ids: list[str],
+    ) -> dict[str, Path]:
         all_samples = train_samples + val_samples
 
-        # 1. Silver Dataset: Validated unreviewed samples
-        silver_samples = [s for s in all_samples if s.review.status != ReviewStatus.APPROVED]
-        silver_dicts = [s.model_dump() for s in silver_samples]
-        silver_path = self.export_dir / "silver.jsonl"
-        write_jsonl(silver_dicts, silver_path)
-
-        # 2. Gold Dataset: Only samples explicitly approved in manifest
+        # 1. Gold Dataset: Only samples explicitly approved in manifest
         gold_samples = [s for s in all_samples if s.id in approved_sample_ids]
         for g in gold_samples:
             g.review.status = ReviewStatus.APPROVED
         gold_dicts = [g.model_dump() for g in gold_samples]
         gold_path = self.export_dir / "gold.jsonl"
         write_jsonl(gold_dicts, gold_path)
+
+        # 2. Silver Dataset: Validated unreviewed samples (not in Gold)
+        silver_samples = [s for s in all_samples if s.id not in approved_sample_ids]
+        silver_dicts = [s.model_dump() for s in silver_samples]
+        silver_path = self.export_dir / "silver.jsonl"
+        write_jsonl(silver_dicts, silver_path)
 
         # 3. SFT Training Dataset
         train_sft_dicts = [self.sft_formatter.format_sample(s) for s in train_samples]
@@ -71,9 +72,9 @@ class JSONLExporter:
         }
 
     def export_evaluation_datasets(
-        self, eval_samples: List[EvalSampleUnion]
-    ) -> Dict[str, Path]:
-        by_benchmark: Dict[str, List[Dict[str, Any]]] = {}
+        self, eval_samples: list[EvalSampleUnion]
+    ) -> dict[str, Path]:
+        by_benchmark: dict[str, list[dict[str, Any]]] = {}
 
         for sample in eval_samples:
             b_id = sample.source.benchmark_id
@@ -81,8 +82,8 @@ class JSONLExporter:
                 by_benchmark[b_id] = []
             by_benchmark[b_id].append(sample.model_dump())
 
-        paths = {}
-        eval_manifest_data = {"benchmarks": {}}
+        paths: dict[str, Path] = {}
+        eval_manifest_data: dict[str, Any] = {"benchmarks": {}}
 
         for b_id, sample_dicts in by_benchmark.items():
             path = self.eval_export_dir / f"{b_id}.jsonl"

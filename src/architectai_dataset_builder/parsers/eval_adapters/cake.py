@@ -4,18 +4,18 @@ CAKE Evaluation Adapter -> FreeResponseEvalSample
 
 import json
 from pathlib import Path
-from typing import List
-from architectai_dataset_builder.models.evaluation import FreeResponseEvalSample, EvalSourceMetadata
-from architectai_dataset_builder.utils.hashing import compute_sha256_str, compute_sha256_file
+
+from architectai_dataset_builder.models.evaluation import EvalSourceMetadata, FreeResponseEvalSample
+from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
 
 
 class CAKEEvalAdapter:
-    def __init__(self):
+    def __init__(self) -> None:
         self.benchmark_id = "cake"
 
-    def parse_directory(self, raw_dir: Path) -> List[FreeResponseEvalSample]:
-        samples = []
+    def parse_directory(self, raw_dir: Path) -> list[FreeResponseEvalSample]:
+        samples: list[FreeResponseEvalSample] = []
         json_file = raw_dir / "cake_eval.json"
         if not json_file.exists():
             return samples

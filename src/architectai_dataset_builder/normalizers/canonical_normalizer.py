@@ -2,15 +2,16 @@
 Canonical Sample Normalizer with Evidence Grounding
 """
 
-from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from datetime import UTC, datetime
+from typing import Any
+
 from architectai_dataset_builder.models.canonical import (
-    ArchitectAISample,
-    SourceMetadata,
     Alternative,
+    ArchitectAISample,
     RecommendedArchitecture,
     ReviewInfo,
     ReviewStatus,
+    SourceMetadata,
 )
 from architectai_dataset_builder.models.evidence import EvidenceItem, EvidenceType
 from architectai_dataset_builder.models.manifest import SourceManifest
@@ -19,14 +20,14 @@ from architectai_dataset_builder.utils.hashing import compute_sha256_str
 
 
 class CanonicalNormalizer:
-    def __init__(self):
+    def __init__(self) -> None:
         self.taxonomy_classifier = TaskTaxonomyClassifier()
 
     def normalize(
         self,
-        parsed_record: Dict[str, Any],
+        parsed_record: dict[str, Any],
         manifest: SourceManifest,
-        split: Optional[str] = None,
+        split: str | None = None,
     ) -> ArchitectAISample:
         sample_id = parsed_record["sample_id"]
         raw_hash = parsed_record["raw_sha256"]
@@ -52,12 +53,12 @@ class CanonicalNormalizer:
             raw_sha256=raw_hash,
             normalized_sha256=norm_hash,
             split=split,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
 
         # 3. Grounded Context & Facts (No Hallucinations)
         scenario = parsed_record.get("context") or parsed_record.get("title") or "Architectural Scenario"
-        
+
         facts = []
         if parsed_record.get("title"):
             facts.append(
