@@ -9,15 +9,11 @@ from typing import Any
 from architectai_dataset_builder.parsers.base import BaseParser
 from architectai_dataset_builder.utils.hashing import compute_sha256_file
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
-
-BOILERPLATE_FILENAMES = {
-    "readme.md",
-    "skill.md",
-    "adr-guide.md",
-    "odh-adr-0000-template.md",
-    "template.md",
-    "contributing.md",
-}
+from architectai_dataset_builder.utils.markdown import (
+    extract_markdown_section,
+    has_template_placeholders,
+    is_boilerplate_filename,
+)
 
 
 class OpenDataHubADRParser(BaseParser):
@@ -30,7 +26,8 @@ class OpenDataHubADRParser(BaseParser):
             if not file_path.is_file() or file_path.name.startswith("."):
                 continue
 
-            if file_path.name.lower() in BOILERPLATE_FILENAMES:
+            rel_path = str(file_path.relative_to(raw_dir))
+            if is_boilerplate_filename(file_path.name, rel_path):
                 records.append(
                     {
                         "sample_id": f"quarantine_{file_path.stem}",
@@ -54,21 +51,54 @@ class OpenDataHubADRParser(BaseParser):
         text = file_path.read_text(encoding="utf-8", errors="ignore")
         raw_hash = compute_sha256_file(file_path)
 
-        title_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
-        title = title_match.group(1).strip() if title_match else file_path.stem
-
-        status = self._extract_section(text, r"## Status", r"##")
-        context = self._extract_section(text, r"## Context", r"##")
-        alternatives_raw = self._extract_section(text, r"## Alternatives Considered", r"##")
-        decision = self._extract_section(text, r"## Decision", r"##")
-        rationale = self._extract_section(text, r"## Rationale", r"##")
-
         record_id = file_path.stem
         sample_id = generate_stable_sample_id(
             source_id=self.source_id,
             file_path=file_path.name,
             record_id=record_id,
         )
+
+        # 1. Quarantine unresolved template placeholders
+        if has_template_placeholders(text):
+            return {
+                "sample_id": sample_id,
+                "source_id": self.source_id,
+                "file_name": file_path.name,
+                "record_id": record_id,
+                "raw_sha256": raw_hash,
+                "is_quarantined": True,
+                "quarantine_reason": "unresolved_template_placeholder",
+                "raw_text": text,
+            }
+
+        title_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
+        title = title_match.group(1).strip() if title_match else file_path.stem
+
+        status = extract_markdown_section(text, r"##\s+Status")
+        context = extract_markdown_section(text, r"##\s+Context")
+        alternatives_raw = extract_markdown_section(text, r"##\s+Alternatives Considered")
+        if not alternatives_raw:
+            alternatives_raw = extract_markdown_section(text, r"##\s+Alternatives")
+        decision = extract_markdown_section(text, r"##\s+Decision")
+        if not decision:
+            decision = extract_markdown_section(text, r"##\s+Proposal")
+        rationale = extract_markdown_section(text, r"##\s+Rationale")
+
+        # 2. Strict grounding: Require genuine decision and context section
+        is_decision_valid = bool(decision) and decision.lower() != "not explicitly stated" and len(decision.strip()) >= 15
+        is_context_valid = bool(context) and len(context.strip()) >= 30
+
+        if not is_decision_valid or not is_context_valid:
+            return {
+                "sample_id": sample_id,
+                "source_id": self.source_id,
+                "file_name": file_path.name,
+                "record_id": record_id,
+                "raw_sha256": raw_hash,
+                "is_quarantined": True,
+                "quarantine_reason": "missing_decision_section",
+                "raw_text": text,
+            }
 
         return {
             "sample_id": sample_id,
@@ -78,23 +108,11 @@ class OpenDataHubADRParser(BaseParser):
             "raw_sha256": raw_hash,
             "title": title,
             "status": status or "Accepted",
-            "context": context or title,
+            "context": context,
             "alternatives": [a.strip("- *") for a in alternatives_raw.split("\n") if a.strip("- *")],
-            "decision": decision or "Not explicitly stated",
+            "decision": decision,
+            "decision_outcome": decision,
             "rationale": rationale or decision,
             "raw_text": text,
             "is_quarantined": False,
         }
-
-    def _extract_section(self, text: str, header_regex: str, next_header_regex: str) -> str:
-        match = re.search(header_regex, text, re.IGNORECASE)
-        if not match:
-            return ""
-        start = match.end()
-        remainder = text[start:]
-        next_match = re.search(next_header_regex, remainder)
-        if next_match:
-            section_text = remainder[: next_match.start()]
-        else:
-            section_text = remainder
-        return section_text.strip()

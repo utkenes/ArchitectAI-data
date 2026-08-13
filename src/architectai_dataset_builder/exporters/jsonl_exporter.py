@@ -32,6 +32,20 @@ class JSONLExporter:
         self.eval_export_dir.mkdir(parents=True, exist_ok=True)
         self.sft_formatter = SFTFormatter()
 
+    def is_valid_sft_sample(self, s: ArchitectAISample) -> bool:
+        """Enforce strict SFT training quality rules: exclude Not explicitly stated and title-only prompts."""
+        formatted = self.sft_formatter.format_sample(s)
+        if not formatted:
+            return False
+        assistant_content = formatted["messages"][2]["content"].strip()
+
+        # Rule 1: Exclude "Not explicitly stated" or empty assistant responses
+        if not assistant_content or "not explicitly stated" in assistant_content.lower():
+            return False
+
+        # Rule 4: Exclude title-only prompts lacking genuine evidence/context
+        return not (len(s.scenario) < 40 and not s.facts and not s.architecture_drivers and not s.alternatives)
+
     def export_training_datasets(
         self,
         train_samples: list[ArchitectAISample],
@@ -54,13 +68,25 @@ class JSONLExporter:
         silver_path = self.export_dir / "silver.jsonl"
         write_jsonl(silver_dicts, silver_path)
 
-        # 3. SFT Training Dataset
-        train_sft_dicts = [self.sft_formatter.format_sample(s) for s in train_samples]
+        # 3. SFT Training Dataset (Strictly Quality Filtered)
+        train_sft_dicts: list[dict[str, Any]] = []
+        for s in train_samples:
+            if self.is_valid_sft_sample(s):
+                fmt = self.sft_formatter.format_sample(s)
+                if fmt is not None:
+                    train_sft_dicts.append(fmt)
+
         train_sft_path = self.export_dir / "train_sft.jsonl"
         write_jsonl(train_sft_dicts, train_sft_path)
 
-        # 4. SFT Validation Dataset
-        val_sft_dicts = [self.sft_formatter.format_sample(s) for s in val_samples]
+        # 4. SFT Validation Dataset (Strictly Quality Filtered)
+        val_sft_dicts: list[dict[str, Any]] = []
+        for s in val_samples:
+            if self.is_valid_sft_sample(s):
+                fmt = self.sft_formatter.format_sample(s)
+                if fmt is not None:
+                    val_sft_dicts.append(fmt)
+
         val_sft_path = self.export_dir / "validation_sft.jsonl"
         write_jsonl(val_sft_dicts, val_sft_path)
 

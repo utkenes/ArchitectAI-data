@@ -1,5 +1,5 @@
 """
-MADR (Markdown Architectural Decision Records) Parser
+MADR (Markdown Architectural Decision Records) Parser with Strict Grounding & Template Quarantining
 """
 
 import re
@@ -9,18 +9,11 @@ from typing import Any
 from architectai_dataset_builder.parsers.base import BaseParser
 from architectai_dataset_builder.utils.hashing import compute_sha256_file
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
-
-BOILERPLATE_FILENAMES = {
-    "readme.md",
-    "changelog.md",
-    "contributing.md",
-    "index.md",
-    "examples.md",
-    "tooling.md",
-    "adr-template.md",
-    "template.md",
-    "license.md",
-}
+from architectai_dataset_builder.utils.markdown import (
+    extract_markdown_section,
+    has_template_placeholders,
+    is_boilerplate_filename,
+)
 
 
 class MADRParser(BaseParser):
@@ -33,8 +26,8 @@ class MADRParser(BaseParser):
             if not file_path.is_file() or file_path.name.startswith("."):
                 continue
 
-            # Check if file is a non-ADR template or documentation boilerplate
-            if file_path.name.lower() in BOILERPLATE_FILENAMES:
+            rel_path = str(file_path.relative_to(raw_dir))
+            if is_boilerplate_filename(file_path.name, rel_path):
                 records.append(
                     {
                         "sample_id": f"quarantine_{file_path.stem}",
@@ -58,22 +51,53 @@ class MADRParser(BaseParser):
         text = file_path.read_text(encoding="utf-8", errors="ignore")
         raw_hash = compute_sha256_file(file_path)
 
-        title_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
-        title = title_match.group(1).strip() if title_match else file_path.stem
-
-        context = self._extract_section(text, r"## Context and Problem Statement", r"##")
-        drivers_raw = self._extract_section(text, r"## Decision Drivers", r"##")
-        options_raw = self._extract_section(text, r"## Considered Options", r"##")
-        outcome_raw = self._extract_section(text, r"## Decision Outcome", r"##")
-        pos_consequences = self._extract_section(text, r"## Positive Consequences", r"##")
-        neg_consequences = self._extract_section(text, r"## Negative Consequences", r"##")
-
         record_id = file_path.stem
         sample_id = generate_stable_sample_id(
             source_id=self.source_id,
             file_path=file_path.name,
             record_id=record_id,
         )
+
+        # 1. Quarantine unresolved template placeholders
+        if has_template_placeholders(text):
+            return {
+                "sample_id": sample_id,
+                "source_id": self.source_id,
+                "file_name": file_path.name,
+                "record_id": record_id,
+                "raw_sha256": raw_hash,
+                "is_quarantined": True,
+                "quarantine_reason": "unresolved_template_placeholder",
+                "raw_text": text,
+            }
+
+        title_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
+        title = title_match.group(1).strip() if title_match else file_path.stem
+
+        context = extract_markdown_section(text, r"##\s+Context and Problem Statement")
+        if not context:
+            context = extract_markdown_section(text, r"##\s+Context")
+        drivers_raw = extract_markdown_section(text, r"##\s+Decision Drivers")
+        options_raw = extract_markdown_section(text, r"##\s+Considered Options")
+        outcome_raw = extract_markdown_section(text, r"##\s+Decision Outcome")
+        pos_consequences = extract_markdown_section(text, r"##\s+Positive Consequences")
+        neg_consequences = extract_markdown_section(text, r"##\s+Negative Consequences")
+
+        # 2. Strict grounding: Require genuine decision outcome and context section
+        is_decision_valid = bool(outcome_raw) and outcome_raw.lower() != "not explicitly stated" and len(outcome_raw.strip()) >= 15
+        is_context_valid = bool(context) and len(context.strip()) >= 30
+
+        if not is_decision_valid or not is_context_valid:
+            return {
+                "sample_id": sample_id,
+                "source_id": self.source_id,
+                "file_name": file_path.name,
+                "record_id": record_id,
+                "raw_sha256": raw_hash,
+                "is_quarantined": True,
+                "quarantine_reason": "missing_decision_section",
+                "raw_text": text,
+            }
 
         return {
             "sample_id": sample_id,
@@ -82,25 +106,13 @@ class MADRParser(BaseParser):
             "record_id": record_id,
             "raw_sha256": raw_hash,
             "title": title,
-            "context": context or title,
+            "context": context,
             "drivers": [d.strip("- *") for d in drivers_raw.split("\n") if d.strip("- *")],
             "options": [o.strip("- *") for o in options_raw.split("\n") if o.strip("- *")],
-            "decision_outcome": outcome_raw or "Not explicitly stated",
+            "decision_outcome": outcome_raw,
+            "decision": outcome_raw,
             "positive_consequences": [p.strip("- *") for p in pos_consequences.split("\n") if p.strip("- *")],
             "negative_consequences": [n.strip("- *") for n in neg_consequences.split("\n") if n.strip("- *")],
             "raw_text": text,
             "is_quarantined": False,
         }
-
-    def _extract_section(self, text: str, header_regex: str, next_header_regex: str) -> str:
-        match = re.search(header_regex, text, re.IGNORECASE)
-        if not match:
-            return ""
-        start = match.end()
-        remainder = text[start:]
-        next_match = re.search(next_header_regex, remainder)
-        if next_match:
-            section_text = remainder[: next_match.start()]
-        else:
-            section_text = remainder
-        return section_text.strip()

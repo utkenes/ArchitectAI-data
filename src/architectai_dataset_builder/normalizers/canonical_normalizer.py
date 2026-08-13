@@ -67,7 +67,8 @@ class CanonicalNormalizer:
         )
 
         # 4. Grounded Context & Facts
-        scenario = parsed_record.get("context") or parsed_record.get("summary") or parsed_record.get("title") or "Architectural Scenario"
+        context = parsed_record.get("context") or parsed_record.get("summary") or parsed_record.get("requirements_text") or parsed_record.get("title") or "Architectural Scenario"
+        scenario = context.strip()
         if kep_status:
             scenario = f"[KEP Status: {kep_status.upper()}] {scenario}"
 
@@ -85,11 +86,11 @@ class CanonicalNormalizer:
         for d in parsed_record.get("drivers", []):
             drivers.append(EvidenceItem(value=d, evidence_type=EvidenceType.EXPLICIT))
 
-        # 6. Decisions & Consequences
+        # 6. Decisions & Consequences (Exclude "Not explicitly stated")
         decisions = []
         dec_val = parsed_record.get("decision_outcome") or parsed_record.get("decision") or parsed_record.get("proposal")
-        if dec_val:
-            decisions.append(EvidenceItem(value=dec_val, evidence_type=EvidenceType.EXPLICIT))
+        if dec_val and dec_val.strip().lower() != "not explicitly stated":
+            decisions.append(EvidenceItem(value=dec_val.strip(), evidence_type=EvidenceType.EXPLICIT))
 
         tradeoffs = []
         for pos in parsed_record.get("positive_consequences", []):
@@ -112,18 +113,25 @@ class CanonicalNormalizer:
 
         # 8. Recommended Architecture
         rec_arch = None
-        if dec_val or parsed_record.get("plantuml_text"):
+        if dec_val and dec_val.strip().lower() != "not explicitly stated":
             rec_arch = RecommendedArchitecture(
-                summary=dec_val or "Architecture Design",
+                summary=dec_val.strip(),
                 components=[c for c in parsed_record.get("options", [])],
             )
+        elif parsed_record.get("plantuml_text"):
+            rec_arch = RecommendedArchitecture(
+                summary="PlantUML Architecture Diagram Specification",
+                diagram_plantuml=parsed_record["plantuml_text"],
+            )
 
-        # 9. Final Answer
+        # 9. Final Answer (Strictly exclude "Not explicitly stated")
         final_answer = None
-        if dec_val:
-            final_answer = f"Decision / Proposal: {dec_val}"
-            if parsed_record.get("rationale"):
-                final_answer += f"\n\nRationale: {parsed_record['rationale']}"
+        if dec_val and dec_val.strip().lower() != "not explicitly stated":
+            final_answer = f"Decision / Proposal:\n{dec_val.strip()}"
+            if parsed_record.get("rationale") and parsed_record["rationale"].strip().lower() != "not explicitly stated":
+                final_answer += f"\n\nRationale:\n{parsed_record['rationale'].strip()}"
+        elif parsed_record.get("plantuml_text"):
+            final_answer = f"Architecture Design (PlantUML):\n```plantuml\n{parsed_record['plantuml_text'].strip()}\n```"
 
         return ArchitectAISample(
             id=sample_id,
