@@ -245,10 +245,17 @@ def build_dataset(build_id: str, mode: str) -> None:
         cfg.data_dir / "exports" / "dataset_stats.json",
     )
 
+    eval_benchmark_counts = {b: len(samples) for b, samples in {
+        "sake": sake_eval,
+        "cake": cake_eval,
+        "archbench": archbench_eval,
+        "r2abench": r2a_eval,
+    }.items() if len(samples) > 0}
+
     ReadinessReporter().generate_report(
         train_samples=train_samples,
         val_samples=val_samples,
-        eval_samples_count=len(eval_samples),
+        eval_benchmark_counts=eval_benchmark_counts,
         quarantine_count=sum(quarantine_reasons.values()),
         failed_parse_count=failed_parse_count,
         exact_dups=exact_dups,

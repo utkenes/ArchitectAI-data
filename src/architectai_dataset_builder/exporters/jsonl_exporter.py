@@ -4,17 +4,16 @@ JSONL Exporter for Training, Silver, Gold, and Evaluation Datasets
 
 from pathlib import Path
 from typing import Any
-
-from architectai_dataset_builder.exporters.sft_formatter import SFTFormatter
 from architectai_dataset_builder.models.canonical import ArchitectAISample, ReviewStatus
 from architectai_dataset_builder.models.evaluation import (
+    MultipleChoiceEvalSample,
+    FreeResponseEvalSample,
     ArchitectureGenerationEvalSample,
     DiagramEvalSample,
-    FreeResponseEvalSample,
-    MultipleChoiceEvalSample,
 )
-from architectai_dataset_builder.utils.hashing import compute_sha256_file
+from architectai_dataset_builder.exporters.sft_formatter import SFTFormatter
 from architectai_dataset_builder.utils.io import write_jsonl
+from architectai_dataset_builder.utils.hashing import compute_sha256_file
 
 EvalSampleUnion = (
     MultipleChoiceEvalSample
@@ -83,18 +82,28 @@ class JSONLExporter:
             by_benchmark[b_id].append(sample.model_dump())
 
         paths: dict[str, Path] = {}
-        eval_manifest_data: dict[str, Any] = {"benchmarks": {}}
+        eval_counts: dict[str, int] = {}
+        eval_manifest_data: dict[str, Any] = {"benchmarks": {}, "summary": {}}
 
+        total_eval_samples = 0
         for b_id, sample_dicts in by_benchmark.items():
             path = self.eval_export_dir / f"{b_id}.jsonl"
             write_jsonl(sample_dicts, path)
             paths[b_id] = path
+            count = len(sample_dicts)
+            eval_counts[b_id] = count
+            total_eval_samples += count
 
             eval_manifest_data["benchmarks"][b_id] = {
-                "count": len(sample_dicts),
+                "count": count,
                 "path": str(path.relative_to(self.export_dir)),
                 "sha256": compute_sha256_file(path),
             }
+
+        eval_manifest_data["summary"] = {
+            "per_benchmark_counts": eval_counts,
+            "total_eval_samples": total_eval_samples,
+        }
 
         eval_manifest_path = self.export_dir / "eval_manifest.json"
         write_jsonl([eval_manifest_data], eval_manifest_path)

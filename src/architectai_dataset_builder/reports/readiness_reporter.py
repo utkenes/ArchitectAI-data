@@ -4,7 +4,6 @@ Automated Training Readiness Reporter for ArchitectAI Model Fine-Tuning Gate
 
 from pathlib import Path
 from typing import Any
-
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.utils.io import write_jsonl
 
@@ -14,7 +13,7 @@ class ReadinessReporter:
         self,
         train_samples: list[ArchitectAISample],
         val_samples: list[ArchitectAISample],
-        eval_samples_count: int,
+        eval_benchmark_counts: dict[str, int],
         quarantine_count: int,
         failed_parse_count: int,
         exact_dups: int,
@@ -43,6 +42,8 @@ class ReadinessReporter:
         exact_dup_rate = round(exact_dups / max(total_silver, 1), 4)
         near_dup_rate = round(near_dups / max(total_silver, 1), 4)
 
+        total_eval_samples = sum(eval_benchmark_counts.values())
+
         blocking_reasons: list[str] = []
         warnings: list[str] = []
 
@@ -58,14 +59,16 @@ class ReadinessReporter:
         if len(source_dist) < 2:
             warnings.append("Low source diversity: less than 2 distinct sources.")
 
+        if total_eval_samples < 10:
+            warnings.append(
+                f"Evaluation coverage is limited (total eval samples: {total_eval_samples}); model comparison results should be treated as preliminary."
+            )
+
         warnings.append("Manual Quality Gate: Review quality_review_samples.jsonl before starting GPU model training.")
 
-        if blocking_reasons:
-            status = "NOT_READY"
-        elif warnings:
-            status = "READY_WITH_WARNINGS"
-        else:
-            status = "READY"
+        status = "NOT_READY" if blocking_reasons else "READY_WITH_WARNINGS"
+
+        eval_summary = {**eval_benchmark_counts, "total_eval_samples": total_eval_samples}
 
         report: dict[str, Any] = {
             "readiness_status": status,
@@ -73,7 +76,7 @@ class ReadinessReporter:
             "train_samples": len(train_samples),
             "validation_samples": len(val_samples),
             "gold_samples": 0,
-            "evaluation_counts": {"total_eval_samples": eval_samples_count},
+            "evaluation_counts": eval_summary,
             "source_distribution": source_dist,
             "task_distribution": task_dist,
             "license_coverage": license_dist,
