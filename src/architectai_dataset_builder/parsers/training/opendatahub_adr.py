@@ -1,5 +1,5 @@
 """
-OpenDataHub Architecture Decision Record (ADR) Parser
+OpenDataHub Architecture Decision Record (ADR) Parser with Section Synonym Mapping
 """
 
 import re
@@ -10,6 +10,9 @@ from architectai_dataset_builder.parsers.base import BaseParser
 from architectai_dataset_builder.utils.hashing import compute_sha256_file
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
 from architectai_dataset_builder.utils.markdown import (
+    ALTERNATIVE_SYNONYMS,
+    CONTEXT_SYNONYMS,
+    DECISION_SYNONYMS,
     extract_markdown_section,
     has_template_placeholders,
     is_boilerplate_filename,
@@ -26,8 +29,7 @@ class OpenDataHubADRParser(BaseParser):
             if not file_path.is_file() or file_path.name.startswith("."):
                 continue
 
-            rel_path = str(file_path.relative_to(raw_dir))
-            if is_boilerplate_filename(file_path.name, rel_path):
+            if is_boilerplate_filename(file_path, self.source_id):
                 records.append(
                     {
                         "sample_id": f"quarantine_{file_path.stem}",
@@ -74,15 +76,11 @@ class OpenDataHubADRParser(BaseParser):
         title_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
         title = title_match.group(1).strip() if title_match else file_path.stem
 
-        status = extract_markdown_section(text, r"##\s+Status")
-        context = extract_markdown_section(text, r"##\s+Context")
-        alternatives_raw = extract_markdown_section(text, r"##\s+Alternatives Considered")
-        if not alternatives_raw:
-            alternatives_raw = extract_markdown_section(text, r"##\s+Alternatives")
-        decision = extract_markdown_section(text, r"##\s+Decision")
-        if not decision:
-            decision = extract_markdown_section(text, r"##\s+Proposal")
-        rationale = extract_markdown_section(text, r"##\s+Rationale")
+        status = extract_markdown_section(text, ["status"])
+        context = extract_markdown_section(text, CONTEXT_SYNONYMS)
+        decision = extract_markdown_section(text, DECISION_SYNONYMS)
+        alternatives_raw = extract_markdown_section(text, ALTERNATIVE_SYNONYMS)
+        rationale = extract_markdown_section(text, ["rationale", "consequences"])
 
         # 2. Strict grounding: Require genuine decision and context section
         is_decision_valid = bool(decision) and decision.lower() != "not explicitly stated" and len(decision.strip()) >= 15

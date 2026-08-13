@@ -1,5 +1,5 @@
 """
-MADR (Markdown Architectural Decision Records) Parser with Strict Grounding & Template Quarantining
+MADR (Markdown Architectural Decision Records) Parser with Section Synonym Mapping
 """
 
 import re
@@ -10,6 +10,9 @@ from architectai_dataset_builder.parsers.base import BaseParser
 from architectai_dataset_builder.utils.hashing import compute_sha256_file
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
 from architectai_dataset_builder.utils.markdown import (
+    ALTERNATIVE_SYNONYMS,
+    CONTEXT_SYNONYMS,
+    DECISION_SYNONYMS,
     extract_markdown_section,
     has_template_placeholders,
     is_boilerplate_filename,
@@ -26,8 +29,7 @@ class MADRParser(BaseParser):
             if not file_path.is_file() or file_path.name.startswith("."):
                 continue
 
-            rel_path = str(file_path.relative_to(raw_dir))
-            if is_boilerplate_filename(file_path.name, rel_path):
+            if is_boilerplate_filename(file_path, self.source_id):
                 records.append(
                     {
                         "sample_id": f"quarantine_{file_path.stem}",
@@ -74,14 +76,12 @@ class MADRParser(BaseParser):
         title_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
         title = title_match.group(1).strip() if title_match else file_path.stem
 
-        context = extract_markdown_section(text, r"##\s+Context and Problem Statement")
-        if not context:
-            context = extract_markdown_section(text, r"##\s+Context")
-        drivers_raw = extract_markdown_section(text, r"##\s+Decision Drivers")
-        options_raw = extract_markdown_section(text, r"##\s+Considered Options")
-        outcome_raw = extract_markdown_section(text, r"##\s+Decision Outcome")
-        pos_consequences = extract_markdown_section(text, r"##\s+Positive Consequences")
-        neg_consequences = extract_markdown_section(text, r"##\s+Negative Consequences")
+        context = extract_markdown_section(text, CONTEXT_SYNONYMS)
+        drivers_raw = extract_markdown_section(text, ["decision drivers", "drivers"])
+        options_raw = extract_markdown_section(text, ALTERNATIVE_SYNONYMS)
+        outcome_raw = extract_markdown_section(text, DECISION_SYNONYMS)
+        pos_consequences = extract_markdown_section(text, ["positive consequences", "pros"])
+        neg_consequences = extract_markdown_section(text, ["negative consequences", "cons"])
 
         # 2. Strict grounding: Require genuine decision outcome and context section
         is_decision_valid = bool(outcome_raw) and outcome_raw.lower() != "not explicitly stated" and len(outcome_raw.strip()) >= 15

@@ -1,5 +1,5 @@
 """
-Spotify Backstage Architecture Decision Records Parser with Strict Grounding & Template Quarantining
+Spotify Backstage Architecture Decision Records Parser with Source-Aware Whitelisting & Synonym Mapping
 """
 
 import re
@@ -10,6 +10,10 @@ from architectai_dataset_builder.parsers.base import BaseParser
 from architectai_dataset_builder.utils.hashing import compute_sha256_file
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
 from architectai_dataset_builder.utils.markdown import (
+    ALTERNATIVE_SYNONYMS,
+    CONSEQUENCE_SYNONYMS,
+    CONTEXT_SYNONYMS,
+    DECISION_SYNONYMS,
     extract_markdown_section,
     has_template_placeholders,
     is_boilerplate_filename,
@@ -26,8 +30,7 @@ class BackstageADRParser(BaseParser):
             if not file_path.is_file() or file_path.name.startswith("."):
                 continue
 
-            rel_path = str(file_path.relative_to(raw_dir))
-            if is_boilerplate_filename(file_path.name, rel_path):
+            if is_boilerplate_filename(file_path, self.source_id):
                 records.append(
                     {
                         "sample_id": f"quarantine_{file_path.stem}",
@@ -74,12 +77,10 @@ class BackstageADRParser(BaseParser):
         title_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
         title = title_match.group(1).strip() if title_match else file_path.stem
 
-        context = extract_markdown_section(text, r"##\s+Context")
-        decision = extract_markdown_section(text, r"##\s+Decision")
-        if not decision:
-            decision = extract_markdown_section(text, r"##\s+Proposal")
-        consequences = extract_markdown_section(text, r"##\s+Consequences")
-        alternatives = extract_markdown_section(text, r"##\s+Alternatives")
+        context = extract_markdown_section(text, CONTEXT_SYNONYMS)
+        decision = extract_markdown_section(text, DECISION_SYNONYMS)
+        consequences = extract_markdown_section(text, CONSEQUENCE_SYNONYMS)
+        alternatives = extract_markdown_section(text, ALTERNATIVE_SYNONYMS)
 
         # 2. Strict grounding: Require genuine decision and context section
         is_decision_valid = bool(decision) and decision.lower() != "not explicitly stated" and len(decision.strip()) >= 15
