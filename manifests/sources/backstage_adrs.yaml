@@ -1,0 +1,18 @@
+source_id: "backstage_adrs"
+name: "Spotify Backstage Architecture Decision Records"
+source_type: "adr_repository"
+origin:
+  provider: "github"
+  repository_url: "https://github.com/backstage/backstage"
+version:
+  revision: "master"
+  commit_sha: "7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b"
+license:
+  spdx_id: "Apache-2.0"
+  verified: true
+  verification_source: "LICENSE file in repository root"
+policy:
+  training_allowed: true
+  evaluation_only: false
+  redistribution_allowed: true
+notes: "Official Spotify Backstage ADR collection under docs/architecture-decisions"

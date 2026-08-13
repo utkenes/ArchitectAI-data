@@ -1,0 +1,18 @@
+source_id: "k8s_keps"
+name: "Kubernetes Architecture Enhancement Proposals (KEPs)"
+source_type: "kep_repository"
+origin:
+  provider: "github"
+  repository_url: "https://github.com/kubernetes/enhancements"
+version:
+  revision: "master"
+  commit_sha: "1f2e3d4c5b6a7f8e9d0c1b2a3f4e5d6c7b8a9f0e"
+license:
+  spdx_id: "Apache-2.0"
+  verified: true
+  verification_source: "LICENSE file in repository root"
+policy:
+  training_allowed: true
+  evaluation_only: false
+  redistribution_allowed: true
+notes: "Official Kubernetes Enhancement Proposals collection under keps/"

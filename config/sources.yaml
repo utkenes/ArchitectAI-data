@@ -1,57 +1,32 @@
 sources:
-  opendatahub_adr:
-    name: "Open Data Hub Architecture Decision Records"
-    source_type: "adr_repository"
-    provider: "github"
-    repository_url: "https://github.com/opendatahub-io/architecture-decision-records"
-    revision: "main"
-    commit_sha: "9f3b1e84a2c01928374651928374651928374651"
-    expected_spdx_license: "Apache-2.0"
-    training_allowed: true
-    evaluation_only: false
+  - id: "opendatahub_adr"
+    manifest: "manifests/sources/opendatahub_adr.yaml"
+    enabled: true
 
-  madr:
-    name: "Markdown Architectural Decision Records"
-    source_type: "adr_template_repository"
-    provider: "github"
-    repository_url: "https://github.com/adr/madr"
-    revision: "main"
-    commit_sha: "e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a2f1e0d9"
-    expected_spdx_license: "MIT"
-    training_allowed: true
-    evaluation_only: false
+  - id: "madr"
+    manifest: "manifests/sources/madr.yaml"
+    enabled: true
 
-  r2abench:
-    name: "R2ABench Requirements-to-Architecture Benchmark"
-    source_type: "r2a_benchmark"
-    provider: "figshare"
-    repository_url: "https://figshare.com/s/01f0a5fb6243a6a60f23"
-    release_version: "v1.0"
-    expected_spdx_license: "CC-BY-4.0"
-    training_allowed: true
-    evaluation_only: false
-    protected_holdout_split: true
+  - id: "r2abench"
+    manifest: "manifests/sources/r2abench.yaml"
+    enabled: true
 
-  sake:
-    name: "SAKE Architecture Knowledge Benchmark"
-    source_type: "eval_benchmark"
-    provider: "benchmark_repository"
-    expected_spdx_license: "CC-BY-4.0"
-    training_allowed: false
-    evaluation_only: true
+  - id: "backstage_adrs"
+    manifest: "manifests/sources/backstage_adrs.yaml"
+    enabled: true
 
-  cake:
-    name: "CAKE Context-Aware Knowledge Evaluation"
-    source_type: "eval_benchmark"
-    provider: "benchmark_repository"
-    expected_spdx_license: "CC-BY-4.0"
-    training_allowed: false
-    evaluation_only: true
+  - id: "k8s_keps"
+    manifest: "manifests/sources/k8s_keps.yaml"
+    enabled: true
 
-  archbench:
-    name: "ArchBench Architecture Design Benchmark"
-    source_type: "eval_benchmark"
-    provider: "benchmark_repository"
-    expected_spdx_license: "CC-BY-4.0"
-    training_allowed: false
-    evaluation_only: true
+  - id: "sake"
+    manifest: "manifests/sources/sake.yaml"
+    enabled: true
+
+  - id: "cake"
+    manifest: "manifests/sources/cake.yaml"
+    enabled: true
+
+  - id: "archbench"
+    manifest: "manifests/sources/archbench.yaml"
+    enabled: true
