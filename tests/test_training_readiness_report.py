@@ -1,13 +1,6 @@
 from pathlib import Path
-
-from architectai_dataset_builder.models.canonical import (
-    ArchitectAISample,
-    ReviewInfo,
-    ReviewStatus,
-    SourceMetadata,
-    TaskType,
-)
 from architectai_dataset_builder.reports.readiness_reporter import ReadinessReporter
+from architectai_dataset_builder.models.canonical import ArchitectAISample, SourceMetadata, TaskType, ReviewInfo, ReviewStatus
 
 
 def test_readiness_report_generation(tmp_path: Path):
@@ -33,7 +26,7 @@ def test_readiness_report_generation(tmp_path: Path):
     rep = reporter.generate_report(
         train_samples=[sample],
         val_samples=[],
-        eval_samples_count=5,
+        eval_benchmark_counts={"sake": 1, "cake": 1, "archbench": 1, "r2abench": 1},
         quarantine_count=2,
         failed_parse_count=0,
         exact_dups=0,
@@ -44,4 +37,5 @@ def test_readiness_report_generation(tmp_path: Path):
 
     assert rep["readiness_status"] in ["READY", "READY_WITH_WARNINGS"]
     assert rep["total_silver_samples"] == 1
+    assert rep["evaluation_counts"]["total_eval_samples"] == 4
     assert out_file.exists()

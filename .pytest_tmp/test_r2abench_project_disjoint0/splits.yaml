@@ -1,0 +1,4 @@
+splits:
+  training_projects: ['proj_001']
+  validation_projects: ['proj_002']
+  held_out_projects: ['proj_003']

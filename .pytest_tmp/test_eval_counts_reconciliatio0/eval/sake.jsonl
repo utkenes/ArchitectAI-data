@@ -1,0 +1,1 @@
+{"id": "sake_q1", "source": {"benchmark_id": "sake", "sample_id": "sake_q1", "license_id": "CC-BY-4.0", "raw_sha256": "raw", "normalized_sha256": "norm", "evaluation_only": true, "split": "held_out_eval"}, "question": "Question 1?", "options": {"A": "Opt A"}, "correct_answer": "A", "explanation": null}
