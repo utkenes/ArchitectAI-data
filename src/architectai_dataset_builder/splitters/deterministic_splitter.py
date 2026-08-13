@@ -1,70 +1,76 @@
 """
-Deterministic Dataset Splitter and R2ABench Project-Level Split Manager
+Composite Group-Level Deterministic Dataset Splitter
 """
 
-import random
+from typing import Tuple
 from pathlib import Path
-
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.utils.io import load_yaml
+from architectai_dataset_builder.utils.hashing import hash_string_to_int
 
 
 class DeterministicSplitter:
-    def __init__(self, splits_manifest_path: Path, seed: int = 42, train_ratio: float = 0.80):
-        self.seed = seed
+    def __init__(
+        self,
+        split_manifest_path: Path,
+        train_ratio: float = 0.80,
+        val_ratio: float = 0.20,
+    ) -> None:
+        self.split_manifest_path = Path(split_manifest_path)
         self.train_ratio = train_ratio
-        self.r2abench_splits = self._load_r2abench_manifest(splits_manifest_path)
+        self.val_ratio = val_ratio
+        self.r2abench_splits = self._load_r2abench_splits()
 
-    def _load_r2abench_manifest(self, path: Path) -> dict[str, set[str]]:
-        if not path.exists():
-            return {"train": set(), "validation": set(), "held_out": set()}
-        data = load_yaml(path)
+    def _load_r2abench_splits(self) -> dict[str, list[str]]:
+        if not self.split_manifest_path.exists():
+            return {"training": [], "validation": [], "held_out": []}
+        data = load_yaml(self.split_manifest_path)
+        splits = data.get("splits", {})
         return {
-            "train": set(data.get("train_projects", [])),
-            "validation": set(data.get("validation_projects", [])),
-            "held_out": set(data.get("held_out_projects", [])),
+            "training": splits.get("training_projects", []),
+            "validation": splits.get("validation_projects", []),
+            "held_out": splits.get("held_out_projects", []),
         }
 
     def split_samples(
         self, samples: list[ArchitectAISample]
-    ) -> tuple[list[ArchitectAISample], list[ArchitectAISample]]:
+    ) -> Tuple[list[ArchitectAISample], list[ArchitectAISample]]:
         train_samples: list[ArchitectAISample] = []
         val_samples: list[ArchitectAISample] = []
 
-        # Separate R2ABench project-level splits from general random splits
-        generic_samples: list[ArchitectAISample] = []
+        # Map each group_id deterministically to split
+        group_split_map: dict[str, str] = {}
 
         for sample in samples:
-            if sample.source.source_id == "r2abench":
-                project_id = sample.source.project_id
-                if project_id in self.r2abench_splits["held_out"]:
-                    # Project is reserved for held-out evaluation! Skip training assignment
-                    continue
-                elif project_id in self.r2abench_splits["validation"]:
-                    sample.source.split = "validation"
-                    sample.source.split_reason = "r2abench_manifest_project_split"
-                    val_samples.append(sample)
+            # 1. Composite group_id isolation
+            group_id = (
+                sample.source.group_id
+                or f"group_{sample.source.source_id}_{sample.source.project_id or 'default'}_{sample.source.source_record_id}"
+            )
+
+            # 2. Check R2ABench project-level manifest rules
+            if sample.source.source_id == "r2abench" and sample.source.project_id:
+                pid = sample.source.project_id
+                if pid in self.r2abench_splits["training"]:
+                    assigned_split = "train"
+                elif pid in self.r2abench_splits["validation"]:
+                    assigned_split = "validation"
                 else:
-                    sample.source.split = "train"
-                    sample.source.split_reason = "r2abench_manifest_project_split"
-                    train_samples.append(sample)
+                    # Deterministic hash split for unscheduled R2ABench projects
+                    val = hash_string_to_int(group_id) % 100
+                    assigned_split = "train" if val < (self.train_ratio * 100) else "validation"
             else:
-                generic_samples.append(sample)
+                # Deterministic hash split based on composite group_id
+                if group_id not in group_split_map:
+                    val = hash_string_to_int(group_id) % 100
+                    group_split_map[group_id] = "train" if val < (self.train_ratio * 100) else "validation"
+                assigned_split = group_split_map[group_id]
 
-        # Apply seeded deterministic shuffle to generic samples
-        rng = random.Random(self.seed)
-        shuffled = list(generic_samples)
-        rng.shuffle(shuffled)
+            sample.source.split = assigned_split
 
-        cutoff = int(len(shuffled) * self.train_ratio)
-        for idx, sample in enumerate(shuffled):
-            if idx < cutoff:
-                sample.source.split = "train"
-                sample.source.split_reason = "deterministic_ratio_split"
+            if assigned_split == "train":
                 train_samples.append(sample)
             else:
-                sample.source.split = "validation"
-                sample.source.split_reason = "deterministic_ratio_split"
                 val_samples.append(sample)
 
         return train_samples, val_samples
