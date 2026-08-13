@@ -1,17 +1,16 @@
 """
-Canonical Sample Normalizer with Evidence Grounding
+Canonical Sample Normalizer with Evidence Grounding and Composite Group IDs
 """
 
-from datetime import UTC, datetime
-from typing import Any
-
+from datetime import datetime, timezone
+from typing import Any, Optional
 from architectai_dataset_builder.models.canonical import (
-    Alternative,
     ArchitectAISample,
+    SourceMetadata,
+    Alternative,
     RecommendedArchitecture,
     ReviewInfo,
     ReviewStatus,
-    SourceMetadata,
 )
 from architectai_dataset_builder.models.evidence import EvidenceItem, EvidenceType
 from architectai_dataset_builder.models.manifest import SourceManifest
@@ -27,7 +26,7 @@ class CanonicalNormalizer:
         self,
         parsed_record: dict[str, Any],
         manifest: SourceManifest,
-        split: str | None = None,
+        split: Optional[str] = None,
     ) -> ArchitectAISample:
         sample_id = parsed_record["sample_id"]
         raw_hash = parsed_record["raw_sha256"]
@@ -37,7 +36,13 @@ class CanonicalNormalizer:
         # 1. Grounded Task Taxonomy
         task_type = self.taxonomy_classifier.classify(parsed_record)
 
-        # 2. Source Provenance Metadata
+        # 2. Composite Group ID (Prevents ID collisions across repos)
+        project_id = parsed_record.get("project_id") or "default"
+        record_id = parsed_record.get("record_id", sample_id)
+        group_id = f"group_{manifest.source_id}_{project_id}_{record_id}"
+
+        # 3. Source Provenance Metadata
+        kep_status = parsed_record.get("kep_status")
         source_meta = SourceMetadata(
             source_id=manifest.source_id,
             source_name=manifest.name,
@@ -45,19 +50,23 @@ class CanonicalNormalizer:
             source_version=manifest.version.revision or manifest.version.release_version,
             source_commit_sha=manifest.version.commit_sha,
             source_file_path=parsed_record.get("file_name", "unknown"),
-            source_record_id=parsed_record.get("record_id", sample_id),
-            project_id=parsed_record.get("project_id"),
+            source_record_id=record_id,
+            project_id=project_id,
+            group_id=group_id,
             provenance_type="real_world",
             license_id=manifest.license.spdx_id,
             license_verified=manifest.license.verified,
             raw_sha256=raw_hash,
             normalized_sha256=norm_hash,
             split=split,
-            created_at=datetime.now(UTC).isoformat(),
+            kep_status=kep_status,
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
 
-        # 3. Grounded Context & Facts (No Hallucinations)
-        scenario = parsed_record.get("context") or parsed_record.get("title") or "Architectural Scenario"
+        # 4. Grounded Context & Facts
+        scenario = parsed_record.get("context") or parsed_record.get("summary") or parsed_record.get("title") or "Architectural Scenario"
+        if kep_status:
+            scenario = f"[KEP Status: {kep_status.upper()}] {scenario}"
 
         facts = []
         if parsed_record.get("title"):
@@ -68,14 +77,14 @@ class CanonicalNormalizer:
                 )
             )
 
-        # 4. Drivers & Constraints
+        # 5. Drivers & Constraints
         drivers = []
         for d in parsed_record.get("drivers", []):
             drivers.append(EvidenceItem(value=d, evidence_type=EvidenceType.EXPLICIT))
 
-        # 5. Decisions & Consequences
+        # 6. Decisions & Consequences
         decisions = []
-        dec_val = parsed_record.get("decision_outcome") or parsed_record.get("decision")
+        dec_val = parsed_record.get("decision_outcome") or parsed_record.get("decision") or parsed_record.get("proposal")
         if dec_val:
             decisions.append(EvidenceItem(value=dec_val, evidence_type=EvidenceType.EXPLICIT))
 
@@ -88,13 +97,17 @@ class CanonicalNormalizer:
             tradeoffs.append(
                 EvidenceItem(value=f"Disadvantage: {neg}", evidence_type=EvidenceType.EXPLICIT)
             )
+        for t in parsed_record.get("tradeoffs", []):
+            tradeoffs.append(
+                EvidenceItem(value=f"Risk/Trade-off: {t}", evidence_type=EvidenceType.EXPLICIT)
+            )
 
-        # 6. Alternatives
+        # 7. Alternatives
         alternatives = []
         for opt in parsed_record.get("options", []) or parsed_record.get("alternatives", []):
             alternatives.append(Alternative(option=opt))
 
-        # 7. Recommended Architecture
+        # 8. Recommended Architecture
         rec_arch = None
         if dec_val or parsed_record.get("plantuml_text"):
             rec_arch = RecommendedArchitecture(
@@ -102,10 +115,10 @@ class CanonicalNormalizer:
                 components=[c for c in parsed_record.get("options", [])],
             )
 
-        # 8. Final Answer (Grounded string)
+        # 9. Final Answer
         final_answer = None
         if dec_val:
-            final_answer = f"Decision: {dec_val}"
+            final_answer = f"Decision / Proposal: {dec_val}"
             if parsed_record.get("rationale"):
                 final_answer += f"\n\nRationale: {parsed_record['rationale']}"
 
