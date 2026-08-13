@@ -1,7 +1,8 @@
 """
-Evaluation-Specific Schemas Isolated from Canonical Training Schema
+Protected Evaluation Benchmark Data Models with Ingestion Metrics Tracking
 """
 
+from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
@@ -21,8 +22,7 @@ class MultipleChoiceEvalSample(BaseModel):
     question: str
     options: dict[str, str]
     correct_answer: str
-    explanation: str | None = None
-    taxonomy_category: str | None = None
+    explanation: Optional[str] = None
 
 
 class FreeResponseEvalSample(BaseModel):
@@ -31,7 +31,7 @@ class FreeResponseEvalSample(BaseModel):
     prompt: str
     reference_answer: str
     grading_rubric: list[str] = Field(default_factory=list)
-    context: str | None = None
+    context: Optional[str] = None
 
 
 class ArchitectureGenerationEvalSample(BaseModel):
@@ -46,7 +46,16 @@ class ArchitectureGenerationEvalSample(BaseModel):
 class DiagramEvalSample(BaseModel):
     id: str
     source: EvalSourceMetadata
-    project_id: str
     requirements_text: str
     reference_plantuml: str
     diagram_type: str = "component"
+
+
+class EvalIngestionSummary(BaseModel):
+    benchmark_id: str
+    discovered_count: int
+    parsed_count: int
+    unsupported_count: int
+    quarantined_count: int
+    final_eval_count: int
+    unsupported_reasons: dict[str, int] = Field(default_factory=dict)
