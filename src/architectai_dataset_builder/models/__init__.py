@@ -5,7 +5,6 @@ Models Package Exports
 from architectai_dataset_builder.models.canonical import (
     Alternative,
     ArchitectAISample,
-    FailureMode,
     RecommendedArchitecture,
     ReviewInfo,
     ReviewStatus,
@@ -21,21 +20,21 @@ from architectai_dataset_builder.models.evaluation import (
 )
 from architectai_dataset_builder.models.evidence import EvidenceItem, EvidenceType
 from architectai_dataset_builder.models.manifest import (
+    ApprovedSampleEntry,
     BuildManifest,
     LicenseMetadata,
     LicensePolicy,
     ReviewManifest,
     SourceManifest,
+    SourceOrigin,
+    SourcePolicy,
+    SourceVersion,
 )
-from architectai_dataset_builder.models.preference import NegativeSample, PreferenceSample
-from architectai_dataset_builder.models.reports import (
-    ContaminationReport,
-    DatasetStatsReport,
-    LeakageDetail,
-)
+from architectai_dataset_builder.models.reports import ContaminationReport, DatasetStatsReport, LeakageDetail
 
 __all__ = [
     "Alternative",
+    "ApprovedSampleEntry",
     "ArchitectAISample",
     "ArchitectureGenerationEvalSample",
     "BuildManifest",
@@ -45,19 +44,19 @@ __all__ = [
     "EvalSourceMetadata",
     "EvidenceItem",
     "EvidenceType",
-    "FailureMode",
     "FreeResponseEvalSample",
     "LeakageDetail",
     "LicenseMetadata",
     "LicensePolicy",
     "MultipleChoiceEvalSample",
-    "NegativeSample",
-    "PreferenceSample",
     "RecommendedArchitecture",
     "ReviewInfo",
     "ReviewManifest",
     "ReviewStatus",
     "SourceManifest",
     "SourceMetadata",
+    "SourceOrigin",
+    "SourcePolicy",
+    "SourceVersion",
     "TaskType",
 ]

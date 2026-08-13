@@ -4,7 +4,6 @@ Immutable Production Source Downloader and Raw Fixture Manager
 
 import subprocess
 from pathlib import Path
-
 from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
 
@@ -105,26 +104,6 @@ class SourceDownloader:
                 "* Maintenance overhead for team\n",
                 encoding="utf-8",
             )
-            adr2 = dest_dir / "0002-use-event-driven-architecture.md"
-            adr2.write_text(
-                "# Use Event-Driven Architecture for Order Processing\n\n"
-                "## Context and Problem Statement\n"
-                "Order fulfillment service needs to decoupled from payment and inventory updates under high throughput.\n\n"
-                "## Decision Drivers\n"
-                "* High availability\n"
-                "* Decoupled domain services\n\n"
-                "## Considered Options\n"
-                "* Event-driven architecture with RabbitMQ\n"
-                "* Direct REST API calls\n\n"
-                "## Decision Outcome\n"
-                "Chosen option: Event-driven architecture with RabbitMQ, because it provides asynchronous message queuing and failure recovery.\n\n"
-                "## Positive Consequences\n"
-                "* System components fail independently\n"
-                "* Improved scaling under spikes\n\n"
-                "## Negative Consequences\n"
-                "* Eventual consistency complexity\n",
-                encoding="utf-8",
-            )
 
         elif source_id == "opendatahub_adr":
             adr1 = dest_dir / "0001-pipeline-orchestration.md"
@@ -142,6 +121,42 @@ class SourceDownloader:
                 "We decide to adopt Tekton and Kubeflow Pipelines for Kubernetes native workflow execution.\n\n"
                 "## Rationale\n"
                 "Kubeflow offers native UI integration while Tekton ensures cloud-native CRD based execution.\n",
+                encoding="utf-8",
+            )
+
+        elif source_id == "backstage_adrs":
+            adr1 = dest_dir / "adr001-catalog-format.md"
+            adr1.write_text(
+                "# Default Catalog File Format\n\n"
+                "## Context\n"
+                "Backstage software catalog requires a standard serialization format for component entities.\n\n"
+                "## Decision\n"
+                "Adopt YAML schema with catalog-info.yaml as default descriptor file name.\n\n"
+                "## Alternatives\n"
+                "- JSON schema\n"
+                "- TOML format\n\n"
+                "## Consequences\n"
+                "- Easy human readability\n"
+                "- Native Kubernetes style CRD alignment\n",
+                encoding="utf-8",
+            )
+
+        elif source_id == "k8s_keps":
+            kep1 = dest_dir / "kep-1234-structured-logging.md"
+            kep1.write_text(
+                "# KEP-1234: Structured Logging System\n\n"
+                "status: implementable\n\n"
+                "## Summary\n"
+                "Standardize JSON structured logging across all Kubernetes control plane components.\n\n"
+                "## Motivation\n"
+                "Text logs are hard to parse at scale for high volume telemetry systems.\n\n"
+                "## Proposal\n"
+                "Adopt klog structured logging API with contextual logging support.\n\n"
+                "## Alternatives\n"
+                "- Custom log parser sidecar\n"
+                "- Zap logger directly\n\n"
+                "## Risks and Mitigations\n"
+                "- Log size increase: mitigate with log rate limiters.\n",
                 encoding="utf-8",
             )
 

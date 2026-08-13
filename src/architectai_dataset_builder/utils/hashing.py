@@ -23,3 +23,8 @@ def compute_sha256_file(file_path: Path) -> str:
         while chunk := f.read(65536):
             hasher.update(chunk)
     return hasher.hexdigest()
+
+
+def hash_string_to_int(content: str) -> int:
+    """Hash string to integer deterministically."""
+    return int(compute_sha256_str(content)[:8], 16)

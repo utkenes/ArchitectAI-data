@@ -1,0 +1,1 @@
+{"sample_id": "gold_candidate_1", "group_id": null, "source_id": "opendatahub_adr", "task_type": "adr_reasoning", "kep_status": null, "scenario": "Scenario", "expected_response": "Decision answer", "evidence_summary": {"facts_count": 0, "decisions_count": 0, "tradeoffs_count": 0}, "review_status": "unreviewed", "review_notes": "Exported for Gold Seed manual review gate."}

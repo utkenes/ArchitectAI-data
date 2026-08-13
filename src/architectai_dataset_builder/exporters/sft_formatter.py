@@ -3,7 +3,7 @@ Grounded SFT Multi-Turn Conversation Formatter with Composite Group Provenance
 """
 
 from typing import Any, Dict
-from architectai_dataset_builder.models.canonical import ArchitectAISample
+from architectai_dataset_builder.models.canonical import ArchitectAISample, TaskType
 
 
 class SFTFormatter:
@@ -15,7 +15,6 @@ class SFTFormatter:
     )
 
     def format_sample(self, sample: ArchitectAISample) -> Dict[str, Any]:
-        # Formulate instruction prompt based on grounded task type
         user_prompt = f"### Architectural Scenario:\n{sample.scenario}\n\n"
 
         if sample.facts:
@@ -36,9 +35,11 @@ class SFTFormatter:
                 user_prompt += f"- {alt.option}\n"
             user_prompt += "\n"
 
-        user_prompt += f"### Instruction:\nAnalyze the scenario and provide the architectural design recommendation for task: {sample.task_type.value}."
+        if sample.task_type == TaskType.ADR_REASONING:
+            user_prompt += "### Instruction:\nWhat architectural decision was made based on the scenario?"
+        else:
+            user_prompt += f"### Instruction:\nAnalyze the scenario and provide the architectural design recommendation for task: {sample.task_type.value}."
 
-        # Formulate assistant response strictly grounded in sample evidence
         assistant_response = ""
         if sample.final_answer:
             assistant_response = sample.final_answer
@@ -56,6 +57,7 @@ class SFTFormatter:
 
         return {
             "id": sample.id,
+            "sample_id": sample.id,
             "group_id": group_id,
             "task_type": sample.task_type.value,
             "source_id": sample.source.source_id,

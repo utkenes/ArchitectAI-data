@@ -75,7 +75,7 @@ class ArchitectAISample(BaseModel):
     id: str
     source: SourceMetadata
     scenario: str
-    task_type: TaskType
+    task_type: TaskType = TaskType.ADR_REASONING
     facts: list[EvidenceItem] = Field(default_factory=list)
     architecture_drivers: list[EvidenceItem] = Field(default_factory=list)
     recommended_architecture: Optional[RecommendedArchitecture] = None

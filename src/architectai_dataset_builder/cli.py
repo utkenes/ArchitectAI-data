@@ -4,13 +4,14 @@ ArchitectAI Dataset Builder Command Line Interface
 
 from collections import Counter
 from typing import Any
-
 import click
 
 from architectai_dataset_builder.config import Config
 from architectai_dataset_builder.dedup.deduplicator import Deduplicator
 from architectai_dataset_builder.exporters.build_manifest_exporter import BuildManifestExporter
+from architectai_dataset_builder.exporters.gold_seed_exporter import GoldSeedExporter
 from architectai_dataset_builder.exporters.jsonl_exporter import JSONLExporter
+from architectai_dataset_builder.exporters.quality_sampler import QualitySampler
 from architectai_dataset_builder.models.manifest import SourceManifest
 from architectai_dataset_builder.normalizers.canonical_normalizer import CanonicalNormalizer
 from architectai_dataset_builder.normalizers.relevance_filter import RelevanceFilter
@@ -18,14 +19,14 @@ from architectai_dataset_builder.parsers.eval_adapters.archbench import ArchBenc
 from architectai_dataset_builder.parsers.eval_adapters.cake import CAKEEvalAdapter
 from architectai_dataset_builder.parsers.eval_adapters.r2abench import R2ABenchEvalAdapter
 from architectai_dataset_builder.parsers.eval_adapters.sake import SAKEEvalAdapter
+from architectai_dataset_builder.parsers.training.backstage_adrs import BackstageADRParser
+from architectai_dataset_builder.parsers.training.k8s_keps import KubernetesKEPParser
 from architectai_dataset_builder.parsers.training.madr import MADRParser
 from architectai_dataset_builder.parsers.training.opendatahub_adr import OpenDataHubADRParser
 from architectai_dataset_builder.parsers.training.r2abench import R2ABenchParser
+from architectai_dataset_builder.reports.readiness_reporter import ReadinessReporter
 from architectai_dataset_builder.reports.stats_generator import StatsGenerator
-from architectai_dataset_builder.sources.downloader import (
-    ProductionSourceUnavailableError,
-    SourceDownloader,
-)
+from architectai_dataset_builder.sources.downloader import ProductionSourceUnavailableError, SourceDownloader
 from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.splitters.contamination_checker import ContaminationChecker
 from architectai_dataset_builder.splitters.deterministic_splitter import DeterministicSplitter
@@ -37,11 +38,13 @@ from architectai_dataset_builder.validators.schema_validator import SchemaValida
 @click.group()
 def cli() -> None:
     """ArchitectAI Dataset Builder CLI"""
+    pass
 
 
 @cli.group()
 def sources() -> None:
     """Manage architecture data sources and manifests."""
+    pass
 
 
 @sources.command(name="list")
@@ -69,7 +72,7 @@ def verify_sources() -> None:
 
 
 @cli.command(name="build")
-@click.option("--build-id", default="build_v1_001", help="Unique build identifier")
+@click.option("--build-id", default="build_v2_001", help="Unique build identifier")
 @click.option("--mode", type=click.Choice(["production", "fixture"]), default="production", help="Build mode")
 def build_dataset(build_id: str, mode: str) -> None:
     """Execute end-to-end dataset build pipeline."""
@@ -89,7 +92,16 @@ def build_dataset(build_id: str, mode: str) -> None:
     click.echo(f"=== Starting ArchitectAI Dataset Build: {build_id} (Mode: {mode}) ===")
 
     # 1. Fetch Sources
-    sources_to_ingest = ["opendatahub_adr", "madr", "r2abench", "sake", "cake", "archbench"]
+    sources_to_ingest = [
+        "opendatahub_adr",
+        "madr",
+        "r2abench",
+        "backstage_adrs",
+        "k8s_keps",
+        "sake",
+        "cake",
+        "archbench",
+    ]
     source_fetch_modes = {}
 
     for sid in sources_to_ingest:
@@ -99,7 +111,7 @@ def build_dataset(build_id: str, mode: str) -> None:
         except ProductionSourceUnavailableError as e:
             if mode == "production":
                 click.echo(f"CRITICAL ERROR: {e}")
-                raise
+                raise e
             downloader.fetch_source(sid, mode="fixture")
             source_fetch_modes[sid] = "fixture"
 
@@ -112,6 +124,8 @@ def build_dataset(build_id: str, mode: str) -> None:
     raw_madr_records = MADRParser().parse_directory(cfg.data_dir / "raw" / "madr")
     raw_odh_records = OpenDataHubADRParser().parse_directory(cfg.data_dir / "raw" / "opendatahub_adr")
     raw_r2a_records = R2ABenchParser().parse_directory(cfg.data_dir / "raw" / "r2abench")
+    raw_backstage_records = BackstageADRParser().parse_directory(cfg.data_dir / "raw" / "backstage_adrs")
+    raw_k8s_records = KubernetesKEPParser().parse_directory(cfg.data_dir / "raw" / "k8s_keps")
 
     # 3. Normalize & Filter Relevance / License Gating
     parsed_samples = []
@@ -121,10 +135,14 @@ def build_dataset(build_id: str, mode: str) -> None:
     madr_manifest = registry.get_manifest("madr")
     odh_manifest = registry.get_manifest("opendatahub_adr")
     r2a_manifest = registry.get_manifest("r2abench")
+    backstage_manifest = registry.get_manifest("backstage_adrs")
+    k8s_manifest = registry.get_manifest("k8s_keps")
 
     assert madr_manifest is not None
     assert odh_manifest is not None
     assert r2a_manifest is not None
+    assert backstage_manifest is not None
+    assert k8s_manifest is not None
 
     def process_records(records: list[dict[str, Any]], manifest: SourceManifest) -> None:
         nonlocal failed_parse_count
@@ -145,9 +163,13 @@ def build_dataset(build_id: str, mode: str) -> None:
     process_records(raw_madr_records, madr_manifest)
     process_records(raw_odh_records, odh_manifest)
     process_records(raw_r2a_records, r2a_manifest)
+    process_records(raw_backstage_records, backstage_manifest)
+    process_records(raw_k8s_records, k8s_manifest)
 
     quarantine_count = sum(quarantine_reasons.values())
-    click.echo(f"[OK] Parsed candidates: {len(parsed_samples)} | Quarantined: {quarantine_count} | Parse Errors: {failed_parse_count}")
+    click.echo(
+        f"[OK] Parsed candidates: {len(parsed_samples)} | Quarantined: {quarantine_count} | Parse Errors: {failed_parse_count}"
+    )
 
     # 4. License Gating & Schema Validation
     valid_samples = []
@@ -167,9 +189,9 @@ def build_dataset(build_id: str, mode: str) -> None:
     unique_samples, exact_dups, near_dups = deduplicator.process_samples(valid_samples)
     click.echo(f"[OK] Deduplication: {len(unique_samples)} unique ({exact_dups} exact dups, {near_dups} near dups).")
 
-    # 6. Deterministic Splitting
+    # 6. Group-Level Deterministic Splitting
     train_samples, val_samples = splitter.split_samples(unique_samples)
-    click.echo(f"[OK] Split: {len(train_samples)} Train, {len(val_samples)} Validation.")
+    click.echo(f"[OK] Group Split: {len(train_samples)} Train, {len(val_samples)} Validation.")
 
     # 7. Parse Protected Evaluation Benchmarks
     sake_eval = SAKEEvalAdapter().parse_directory(cfg.data_dir / "raw" / "sake")
@@ -199,9 +221,14 @@ def build_dataset(build_id: str, mode: str) -> None:
     train_export_paths = exporter.export_training_datasets(train_samples, val_samples, approved_ids)
     eval_export_paths = exporter.export_evaluation_datasets(eval_samples)
 
+    # 10. Gold Seed & Quality Review Exports
+    GoldSeedExporter(cfg.data_dir / "exports").export_review_candidates(unique_samples)
+    QualitySampler(cfg.data_dir / "exports").export_quality_samples(unique_samples)
+    click.echo("[OK] Exported gold_review_candidates.jsonl and quality_review_samples.jsonl")
+
     all_export_paths = {**train_export_paths, **eval_export_paths}
 
-    # 10. Reports
+    # 11. Reports
     stats_gen = StatsGenerator()
     stats_gen.generate_stats(
         train_samples,
@@ -215,6 +242,19 @@ def build_dataset(build_id: str, mode: str) -> None:
         build_status,
         cfg.data_dir / "exports" / "dataset_stats.json",
     )
+
+    ReadinessReporter().generate_report(
+        train_samples=train_samples,
+        val_samples=val_samples,
+        eval_samples_count=len(eval_samples),
+        quarantine_count=sum(quarantine_reasons.values()),
+        failed_parse_count=failed_parse_count,
+        exact_dups=exact_dups,
+        near_dups=near_dups,
+        has_contamination=contamination_report.has_leakage,
+        output_file=cfg.data_dir / "exports" / "training_readiness_report.json",
+    )
+    click.echo("[OK] Generated training_readiness_report.json")
 
     manifest_exporter = BuildManifestExporter()
     manifest_exporter.export_build_manifest(
