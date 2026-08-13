@@ -1,40 +1,76 @@
 """
-Evidence-Grounded SFT Formatter (System / User / Assistant Message Converter)
+Grounded SFT Multi-Turn Conversation Formatter with Composite Group Provenance
 """
 
-from typing import Any
-
-from architectai_dataset_builder.models.canonical import ArchitectAISample, TaskType
+from typing import Any, Dict
+from architectai_dataset_builder.models.canonical import ArchitectAISample
 
 
 class SFTFormatter:
-    def __init__(self, system_prompt: str | None = None):
-        self.system_prompt = system_prompt or (
-            "You are ArchitectAI, a software architecture decision engine. "
-            "Analyze project requirements, constraints, and trade-offs to provide grounded architectural decisions."
-        )
+    """Formats canonical ArchitectAISample into Instruction-Response SFT conversations."""
 
-    def format_sample(self, sample: ArchitectAISample) -> dict[str, Any]:
-        """Formats a canonical ArchitectAISample into OpenAI/HuggingFace SFT format."""
-        
-        # Grounded user prompt construction based on evidence-backed task_type
-        if sample.task_type == TaskType.ADR_REASONING:
-            user_text = f"Given this project context:\n\n{sample.scenario}\n\nWhat architectural decision was made and why?"
-        elif sample.task_type == TaskType.TRADEOFF_ANALYSIS:
-            user_text = f"Analyze the trade-offs and options for this architectural scenario:\n\n{sample.scenario}"
-        elif sample.task_type == TaskType.ARCHITECTURE_GENERATION:
-            user_text = f"Design the system architecture for the following requirements:\n\n{sample.scenario}"
+    SYSTEM_PROMPT = (
+        "You are ArchitectAI, an expert software architecture AI assistant. "
+        "Provide evidence-grounded architectural recommendations, tradeoff analyses, and design decisions."
+    )
+
+    def format_sample(self, sample: ArchitectAISample) -> Dict[str, Any]:
+        # Formulate instruction prompt based on grounded task type
+        user_prompt = f"### Architectural Scenario:\n{sample.scenario}\n\n"
+
+        if sample.facts:
+            user_prompt += "### Key Facts & Context:\n"
+            for f in sample.facts:
+                user_prompt += f"- {f.value}\n"
+            user_prompt += "\n"
+
+        if sample.architecture_drivers:
+            user_prompt += "### Architectural Drivers:\n"
+            for d in sample.architecture_drivers:
+                user_prompt += f"- {d.value}\n"
+            user_prompt += "\n"
+
+        if sample.alternatives:
+            user_prompt += "### Considered Alternatives:\n"
+            for alt in sample.alternatives:
+                user_prompt += f"- {alt.option}\n"
+            user_prompt += "\n"
+
+        user_prompt += f"### Instruction:\nAnalyze the scenario and provide the architectural design recommendation for task: {sample.task_type.value}."
+
+        # Formulate assistant response strictly grounded in sample evidence
+        assistant_response = ""
+        if sample.final_answer:
+            assistant_response = sample.final_answer
         else:
-            user_text = f"Architectural Scenario:\n\n{sample.scenario}\n\nProvide architectural analysis and recommendations."
+            if sample.decisions:
+                assistant_response += "### Decision:\n" + "\n".join([f"- {d.value}" for d in sample.decisions]) + "\n\n"
 
-        assistant_text = sample.final_answer or "Architectural rationale recorded in source metadata."
+            if sample.tradeoffs:
+                assistant_response += "### Trade-off & Consequence Analysis:\n" + "\n".join([f"- {t.value}" for t in sample.tradeoffs]) + "\n\n"
+
+            if sample.recommended_architecture:
+                assistant_response += f"### Recommended Architecture:\n{sample.recommended_architecture.summary}\n"
+
+        group_id = sample.source.group_id or f"group_{sample.source.source_id}_{sample.source.project_id or 'default'}_{sample.source.source_record_id}"
 
         return {
-            "sample_id": sample.id,
+            "id": sample.id,
+            "group_id": group_id,
             "task_type": sample.task_type.value,
+            "source_id": sample.source.source_id,
+            "source_record_id": sample.source.source_record_id,
+            "project_id": sample.source.project_id,
+            "kep_status": sample.source.kep_status,
+            "split": sample.source.split,
             "messages": [
-                {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": user_text},
-                {"role": "assistant", "content": assistant_text},
+                {"role": "system", "content": self.SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+                {"role": "assistant", "content": assistant_response.strip()},
             ],
+            "provenance": {
+                "license_id": sample.source.license_id,
+                "raw_sha256": sample.source.raw_sha256,
+                "normalized_sha256": sample.source.normalized_sha256,
+            },
         }
