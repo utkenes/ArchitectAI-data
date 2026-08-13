@@ -51,7 +51,7 @@ class CanonicalNormalizer:
             source_version=manifest.version.revision or manifest.version.release_version,
             source_commit_sha=manifest.version.commit_sha or manifest.version.resolved_commit,
             requested_ref=manifest.version.requested_ref or manifest.version.revision or "main",
-            resolved_commit=manifest.version.resolved_commit or manifest.version.commit_sha or "unknown_commit",
+            resolved_commit=manifest.version.resolved_commit,
             source_file_path=parsed_record.get("file_name", "unknown"),
             source_record_id=record_id,
             project_id=project_id,

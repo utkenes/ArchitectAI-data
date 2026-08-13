@@ -42,12 +42,14 @@ class SourceDownloader:
 
             # Resolve exact 40-character commit SHA
             resolved_sha = self._resolve_commit_sha(dest_dir)
-            manifest.version.resolved_commit = resolved_sha or manifest.version.commit_sha
-            manifest.version.commit_sha = manifest.version.resolved_commit
-            manifest.notes = f"Mode: production | Ref: {revision} | Commit: {manifest.version.resolved_commit}"
+            manifest.version.resolved_commit = resolved_sha
+            manifest.version.commit_sha = resolved_sha
+            manifest.notes = f"Mode: production | Ref: {revision} | Commit: {resolved_sha or 'none'}"
         else:
             self._ensure_fixture_files(source_id, dest_dir)
-            manifest.version.resolved_commit = manifest.version.commit_sha or "fixture_commit_00000000000000000000000000000000"
+            resolved_sha = self._resolve_commit_sha(dest_dir)
+            manifest.version.resolved_commit = resolved_sha
+            manifest.version.commit_sha = resolved_sha
             manifest.notes = f"Mode: fixture | Local Directory: {dest_dir}"
 
         manifest.integrity["raw_sha256"] = self._compute_dir_hash(dest_dir)
@@ -63,7 +65,9 @@ class SourceDownloader:
                 check=False,
             )
             if res.returncode == 0 and res.stdout.strip():
-                return res.stdout.strip()
+                out = res.stdout.strip()
+                if len(out) == 40 and all(c in "0123456789abcdefABCDEF" for c in out):
+                    return out
         except (subprocess.SubprocessError, OSError):
             pass
         return None

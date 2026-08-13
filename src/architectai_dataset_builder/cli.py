@@ -271,7 +271,7 @@ def build_dataset(build_id: str, mode: str) -> None:
         sources_summary={
             s.source_id: {
                 "requested_ref": s.version.requested_ref or s.version.revision or "main",
-                "resolved_commit": s.version.resolved_commit or s.version.commit_sha or "unknown_commit",
+                "resolved_commit": s.version.resolved_commit,
             }
             for s in registry.list_sources()
         },
