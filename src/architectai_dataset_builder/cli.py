@@ -10,6 +10,7 @@ import click
 from architectai_dataset_builder.config import Config
 from architectai_dataset_builder.dedup.deduplicator import Deduplicator
 from architectai_dataset_builder.exporters.build_manifest_exporter import BuildManifestExporter
+from architectai_dataset_builder.exporters.corpus_manifest_exporter import CorpusManifestExporter
 from architectai_dataset_builder.exporters.gold_seed_exporter import GoldSeedExporter
 from architectai_dataset_builder.exporters.jsonl_exporter import JSONLExporter
 from architectai_dataset_builder.exporters.quality_sampler import QualitySampler
@@ -264,6 +265,26 @@ def build_dataset(build_id: str, mode: str) -> None:
         output_file=cfg.data_dir / "exports" / "training_readiness_report.json",
     )
     click.echo("[OK] Generated training_readiness_report.json")
+
+    CorpusManifestExporter(cfg.data_dir / "exports").export_corpus_manifest(
+        build_id=build_id,
+        sources_summary={
+            s.source_id: {
+                "requested_ref": s.version.requested_ref or s.version.revision or "main",
+                "resolved_commit": s.version.resolved_commit or s.version.commit_sha or "unknown_commit",
+            }
+            for s in registry.list_sources()
+        },
+        sample_counts={
+            "train": len(train_samples),
+            "validation": len(val_samples),
+            "silver": len(train_samples) + len(val_samples),
+            "gold": len(approved_ids),
+            "eval": len(eval_samples),
+        },
+        output_file=cfg.data_dir / "exports" / "corpus_manifest.json",
+    )
+    click.echo("[OK] Exported corpus_manifest.json with SHA-256 artifact fingerprints.")
 
     manifest_exporter = BuildManifestExporter()
     manifest_exporter.export_build_manifest(
