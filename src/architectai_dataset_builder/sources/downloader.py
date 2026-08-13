@@ -4,7 +4,6 @@ Immutable Production Source Downloader and Raw Fixture Manager
 
 import subprocess
 from pathlib import Path
-
 from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
 
@@ -29,6 +28,7 @@ class SourceDownloader:
 
         repo_url = manifest.origin.repository_url
         revision = manifest.version.revision or manifest.version.release_version or "main"
+        manifest.version.requested_ref = revision
 
         is_git_repo = repo_url and repo_url.startswith("https://github.com/")
 
@@ -38,13 +38,34 @@ class SourceDownloader:
                 raise ProductionSourceUnavailableError(
                     f"Production fetch failed for source '{source_id}' from URL '{repo_url}' at revision '{revision}'."
                 )
-            manifest.notes = f"Mode: production | Git URL: {repo_url} | Revision: {revision}"
+
+            # Resolve exact 40-character commit SHA
+            resolved_sha = self._resolve_commit_sha(dest_dir)
+            manifest.version.resolved_commit = resolved_sha or manifest.version.commit_sha
+            manifest.version.commit_sha = manifest.version.resolved_commit
+            manifest.notes = f"Mode: production | Ref: {revision} | Commit: {manifest.version.resolved_commit}"
         else:
             self._ensure_fixture_files(source_id, dest_dir)
+            manifest.version.resolved_commit = manifest.version.commit_sha or "fixture_commit_00000000000000000000000000000000"
             manifest.notes = f"Mode: fixture | Local Directory: {dest_dir}"
 
         manifest.integrity["raw_sha256"] = self._compute_dir_hash(dest_dir)
         return dest_dir
+
+    def _resolve_commit_sha(self, dest_dir: Path) -> str | None:
+        try:
+            res = subprocess.run(
+                ["git", "-C", str(dest_dir), "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                return res.stdout.strip()
+        except Exception:
+            pass
+        return None
 
     def _fetch_git_repository(self, repo_url: str, revision: str, dest_dir: Path) -> bool:
         if any(dest_dir.iterdir()):

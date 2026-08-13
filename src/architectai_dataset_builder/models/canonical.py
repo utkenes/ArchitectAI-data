@@ -2,12 +2,11 @@
 Canonical Schema Data Models for ArchitectAI Architecture Training Corpus
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from enum import Enum
-
+from typing import Optional
 from pydantic import BaseModel, Field
-
-from architectai_dataset_builder.models.evidence import EvidenceItem
+from architectai_dataset_builder.models.evidence import EvidenceItem, EvidenceType
 
 
 class TaskType(str, Enum):
@@ -33,42 +32,44 @@ class ReviewStatus(str, Enum):
 
 class ReviewInfo(BaseModel):
     status: ReviewStatus = ReviewStatus.UNREVIEWED
-    reviewer: str | None = None
-    reviewed_at: str | None = None
-    notes: str | None = None
+    reviewer: Optional[str] = None
+    reviewed_at: Optional[str] = None
+    notes: Optional[str] = None
 
 
 class SourceMetadata(BaseModel):
     source_id: str
     source_name: str
-    source_url: str | None = None
-    source_version: str | None = None
-    source_commit_sha: str | None = None
+    source_url: Optional[str] = None
+    source_version: Optional[str] = None
+    source_commit_sha: Optional[str] = None
+    requested_ref: Optional[str] = None
+    resolved_commit: Optional[str] = None
     source_file_path: str
     source_record_id: str
-    project_id: str | None = None
-    group_id: str | None = None
+    project_id: Optional[str] = None
+    group_id: Optional[str] = None
     provenance_type: str = "real_world"
     license_id: str
     license_verified: bool = False
     raw_sha256: str
     normalized_sha256: str
-    split: str | None = None
-    kep_status: str | None = None
-    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    split: Optional[str] = None
+    kep_status: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class Alternative(BaseModel):
     option: str
     pros: list[str] = Field(default_factory=list)
     cons: list[str] = Field(default_factory=list)
-    verdict: str | None = None
+    verdict: Optional[str] = None
 
 
 class RecommendedArchitecture(BaseModel):
     summary: str
     components: list[str] = Field(default_factory=list)
-    diagram_plantuml: str | None = None
+    diagram_plantuml: Optional[str] = None
     quality_attributes: list[str] = Field(default_factory=list)
 
 
@@ -79,9 +80,9 @@ class ArchitectAISample(BaseModel):
     task_type: TaskType = TaskType.ADR_REASONING
     facts: list[EvidenceItem] = Field(default_factory=list)
     architecture_drivers: list[EvidenceItem] = Field(default_factory=list)
-    recommended_architecture: RecommendedArchitecture | None = None
+    recommended_architecture: Optional[RecommendedArchitecture] = None
     alternatives: list[Alternative] = Field(default_factory=list)
     decisions: list[EvidenceItem] = Field(default_factory=list)
     tradeoffs: list[EvidenceItem] = Field(default_factory=list)
-    final_answer: str | None = None
+    final_answer: Optional[str] = None
     review: ReviewInfo = Field(default_factory=ReviewInfo)

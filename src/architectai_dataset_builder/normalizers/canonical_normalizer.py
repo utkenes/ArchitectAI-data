@@ -2,16 +2,15 @@
 Canonical Sample Normalizer with Evidence Grounding and Composite Group IDs
 """
 
-from datetime import UTC, datetime
-from typing import Any
-
+from datetime import datetime, timezone
+from typing import Any, Optional
 from architectai_dataset_builder.models.canonical import (
-    Alternative,
     ArchitectAISample,
+    SourceMetadata,
+    Alternative,
     RecommendedArchitecture,
     ReviewInfo,
     ReviewStatus,
-    SourceMetadata,
 )
 from architectai_dataset_builder.models.evidence import EvidenceItem, EvidenceType
 from architectai_dataset_builder.models.manifest import SourceManifest
@@ -27,7 +26,7 @@ class CanonicalNormalizer:
         self,
         parsed_record: dict[str, Any],
         manifest: SourceManifest,
-        split: str | None = None,
+        split: Optional[str] = None,
     ) -> ArchitectAISample:
         sample_id = parsed_record["sample_id"]
         raw_hash = parsed_record["raw_sha256"]
@@ -49,7 +48,9 @@ class CanonicalNormalizer:
             source_name=manifest.name,
             source_url=manifest.origin.repository_url,
             source_version=manifest.version.revision or manifest.version.release_version,
-            source_commit_sha=manifest.version.commit_sha,
+            source_commit_sha=manifest.version.commit_sha or manifest.version.resolved_commit,
+            requested_ref=manifest.version.requested_ref or manifest.version.revision or "main",
+            resolved_commit=manifest.version.resolved_commit or manifest.version.commit_sha or "unknown_commit",
             source_file_path=parsed_record.get("file_name", "unknown"),
             source_record_id=record_id,
             project_id=project_id,
@@ -61,7 +62,7 @@ class CanonicalNormalizer:
             normalized_sha256=norm_hash,
             split=split,
             kep_status=kep_status,
-            created_at=datetime.now(UTC).isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat(),
         )
 
         # 4. Grounded Context & Facts

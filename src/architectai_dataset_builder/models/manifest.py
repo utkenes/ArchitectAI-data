@@ -2,8 +2,7 @@
 Source Manifest, License Policy, Review Manifest, and Build Manifest Models
 """
 
-from typing import Any
-
+from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
@@ -19,27 +18,29 @@ class LicensePolicy(BaseModel):
 class LicenseMetadata(BaseModel):
     spdx_id: str
     verified: bool = False
-    verification_source: str | None = None
+    verification_source: Optional[str] = None
     policy: LicensePolicy = Field(default_factory=LicensePolicy)
 
 
 class SourceOrigin(BaseModel):
     provider: str
-    repository_url: str | None = None
+    repository_url: Optional[str] = None
 
 
 class SourceVersion(BaseModel):
-    revision: str | None = None
-    commit_sha: str | None = None
-    tag: str | None = None
-    release_version: str | None = None
-    retrieved_at: str | None = None
+    revision: Optional[str] = None
+    commit_sha: Optional[str] = None
+    tag: Optional[str] = None
+    release_version: Optional[str] = None
+    retrieved_at: Optional[str] = None
+    requested_ref: Optional[str] = None
+    resolved_commit: Optional[str] = None
 
 
 class SourcePolicy(BaseModel):
     training_allowed: bool = True
     evaluation_only: bool = False
-    redistribution_allowed: bool | None = None
+    redistribution_allowed: Optional[bool] = None
 
 
 class SourceManifest(BaseModel):
@@ -50,15 +51,15 @@ class SourceManifest(BaseModel):
     version: SourceVersion
     license: LicenseMetadata
     policy: SourcePolicy
-    integrity: dict[str, str | None] = Field(default_factory=dict)
-    notes: str | None = None
+    integrity: dict[str, Optional[str]] = Field(default_factory=dict)
+    notes: Optional[str] = None
 
 
 class ApprovedSampleEntry(BaseModel):
     sample_id: str
     reviewer: str
     approved_at: str
-    notes: str | None = None
+    notes: Optional[str] = None
 
 
 class ReviewManifest(BaseModel):
