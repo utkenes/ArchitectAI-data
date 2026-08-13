@@ -246,12 +246,12 @@ def build_dataset(build_id: str, mode: str) -> None:
         cfg.data_dir / "exports" / "dataset_stats.json",
     )
 
-    eval_benchmark_counts = {b: len(samples) for b, samples in {
-        "sake": sake_eval,
-        "cake": cake_eval,
-        "archbench": archbench_eval,
-        "r2abench": r2a_eval,
-    }.items() if len(samples) > 0}
+    eval_benchmark_counts = {
+        "sake": len(sake_eval),
+        "cake": len(cake_eval),
+        "archbench": len(archbench_eval),
+        "r2abench": len(r2a_eval),
+    }
 
     ReadinessReporter().generate_report(
         train_samples=train_samples,

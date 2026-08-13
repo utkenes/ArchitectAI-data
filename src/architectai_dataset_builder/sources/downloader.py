@@ -4,6 +4,7 @@ Immutable Production Source Downloader and Raw Fixture Manager
 
 import subprocess
 from pathlib import Path
+
 from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
 
@@ -63,7 +64,7 @@ class SourceDownloader:
             )
             if res.returncode == 0 and res.stdout.strip():
                 return res.stdout.strip()
-        except Exception:
+        except (subprocess.SubprocessError, OSError):
             pass
         return None
 

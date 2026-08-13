@@ -3,7 +3,8 @@ Corpus V1 Freeze Manifest & SHA-256 Artifact Fingerprint Exporter
 """
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
+
 from architectai_dataset_builder.utils.hashing import compute_sha256_file
 from architectai_dataset_builder.utils.io import write_jsonl
 
@@ -15,10 +16,10 @@ class CorpusManifestExporter:
     def export_corpus_manifest(
         self,
         build_id: str,
-        sources_summary: Dict[str, Dict[str, Any]],
-        sample_counts: Dict[str, int],
+        sources_summary: dict[str, dict[str, Any]],
+        sample_counts: dict[str, int],
         output_file: Path,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         # Non-recursive SHA-256 artifact fingerprints registry
         artifact_files = [
             "train_sft.jsonl",
@@ -30,7 +31,7 @@ class CorpusManifestExporter:
             "gold_review_candidates.jsonl",
         ]
 
-        artifact_hashes: Dict[str, str] = {}
+        artifact_hashes: dict[str, str] = {}
         for fname in artifact_files:
             fpath = self.export_dir / fname
             if fpath.exists():
@@ -43,7 +44,7 @@ class CorpusManifestExporter:
                 rel_name = f"eval/{ef.name}"
                 artifact_hashes[rel_name] = f"sha256:{compute_sha256_file(ef)}"
 
-        manifest_content: Dict[str, Any] = {
+        manifest_content: dict[str, Any] = {
             "corpus_name": "ArchitectAI Training Corpus V1",
             "corpus_version": "1.0.0",
             "build_id": build_id,
