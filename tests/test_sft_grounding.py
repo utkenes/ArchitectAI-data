@@ -3,6 +3,7 @@ from architectai_dataset_builder.models.canonical import ArchitectAISample, Sour
 from architectai_dataset_builder.utils.markdown import (
     has_template_placeholders,
     is_boilerplate_filename,
+    is_lifecycle_status_only,
 )
 
 
@@ -59,6 +60,33 @@ def test_not_explicitly_stated_rejection():
     )
 
     formatted = formatter.format_sample(sample)
+    assert formatted is None
+
+
+def test_csi_volume_topology_lifecycle_status_rejection():
+    """Regression Test: Reject SFT samples where decision/proposal is status/graduation metadata only."""
+    formatter = SFTFormatter()
+
+    csi_topology_sample = ArchitectAISample(
+        id="arch_csi_topology_status_only",
+        source=SourceMetadata(
+            source_id="k8s_keps",
+            source_name="Kubernetes KEPs",
+            source_file_path="keps/sig-storage/567-csi-topology/README.md",
+            source_record_id="567-csi-topology",
+            license_id="Apache-2.0",
+            license_verified=True,
+            raw_sha256="raw",
+            normalized_sha256="norm",
+            created_at="2026-08-12T12:00:00Z",
+        ),
+        scenario="KEP-567: CSI Volume Topology node selector scheduling constraints.",
+        task_type=TaskType.ADR_REASONING,
+        final_answer="Status: Implementable\n\nGraduation Criteria:\n- [ ] Alpha in v1.14\n- [ ] Beta in v1.15\n- [ ] GA in v1.17",
+    )
+
+    assert is_lifecycle_status_only(csi_topology_sample.final_answer)
+    formatted = formatter.format_sample(csi_topology_sample)
     assert formatted is None
 
 

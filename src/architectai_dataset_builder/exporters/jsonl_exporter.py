@@ -15,6 +15,7 @@ from architectai_dataset_builder.models.evaluation import (
 )
 from architectai_dataset_builder.utils.hashing import compute_sha256_file
 from architectai_dataset_builder.utils.io import write_jsonl
+from architectai_dataset_builder.utils.markdown import is_lifecycle_status_only
 
 EvalSampleUnion = (
     MultipleChoiceEvalSample
@@ -33,14 +34,14 @@ class JSONLExporter:
         self.sft_formatter = SFTFormatter()
 
     def is_valid_sft_sample(self, s: ArchitectAISample) -> bool:
-        """Enforce strict SFT training quality rules: exclude Not explicitly stated and title-only prompts."""
+        """Enforce strict SFT training quality rules: exclude Not explicitly stated, title-only prompts, and status-only targets."""
         formatted = self.sft_formatter.format_sample(s)
         if not formatted:
             return False
         assistant_content = formatted["messages"][2]["content"].strip()
 
-        # Rule 1: Exclude "Not explicitly stated" or empty assistant responses
-        if not assistant_content or "not explicitly stated" in assistant_content.lower():
+        # Rule 1: Exclude "Not explicitly stated", empty, or lifecycle status metadata only assistant responses
+        if not assistant_content or "not explicitly stated" in assistant_content.lower() or is_lifecycle_status_only(assistant_content):
             return False
 
         # Rule 4: Exclude title-only prompts lacking genuine evidence/context

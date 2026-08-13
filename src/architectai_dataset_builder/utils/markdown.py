@@ -81,12 +81,55 @@ ALTERNATIVE_SYNONYMS = [
     "options",
 ]
 
+LIFECYCLE_STATUS_PATTERNS = [
+    r"^\s*status:\s*(provisional|implementable|implemented|alpha|beta|ga|deprecated|withdrawn|rejected|deferred|replaced)\s*$",
+    r"\bgraduation\s+criteria\b",
+    r"\bimplementation\s+status\b",
+    r"\balpha\s+timeline\b",
+    r"\bbeta\s+timeline\b",
+    r"\bga\s+timeline\b",
+]
+
 
 def has_template_placeholders(text: str) -> bool:
     """Check if text contains unresolved template placeholders like ${...}, {{...}}, {title of option...}."""
     if not text:
         return False
     return bool(TEMPLATE_PLACEHOLDER_REGEX.search(text))
+
+
+def is_lifecycle_status_only(text: str) -> bool:
+    """
+    Returns True if text is merely lifecycle/graduation/status metadata
+    (e.g., Alpha/Beta/GA timelines, status: implementable, graduation criteria only)
+    without substantive architectural decision content.
+    """
+    if not text:
+        return True
+
+    clean_text = text.strip().lower()
+
+    # Short status strings like 'Status: Implementable' or 'Status: Alpha'
+    if len(clean_text) < 60:
+        for pat in LIFECYCLE_STATUS_PATTERNS:
+            if re.search(pat, clean_text, re.MULTILINE):
+                return True
+        if clean_text in ["implementable", "implemented", "provisional", "alpha", "beta", "ga"]:
+            return True
+
+    # Check if section consists almost entirely of status/graduation checklist items
+    lines = [line.strip() for line in clean_text.splitlines() if line.strip()]
+    if lines:
+        status_line_count = sum(
+            1
+            for line in lines
+            if any(re.search(pat, line) for pat in LIFECYCLE_STATUS_PATTERNS)
+            or line.startswith(("- [ ] alpha", "- [ ] beta", "- [ ] ga", "- [x] alpha", "- [x] beta", "- [x] ga"))
+        )
+        if (status_line_count / len(lines)) >= 0.60:
+            return True
+
+    return False
 
 
 def is_boilerplate_filename(file_path: Path | str, source_id: str = "") -> bool:

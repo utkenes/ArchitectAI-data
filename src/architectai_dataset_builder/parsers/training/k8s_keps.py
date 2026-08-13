@@ -17,6 +17,7 @@ from architectai_dataset_builder.utils.markdown import (
     extract_markdown_section,
     has_template_placeholders,
     is_boilerplate_filename,
+    is_lifecycle_status_only,
 )
 
 
@@ -92,8 +93,12 @@ class KubernetesKEPParser(BaseParser):
         consequences_text = extract_markdown_section(text, CONSEQUENCE_SYNONYMS)
         alternatives_text = extract_markdown_section(text, ALTERNATIVE_SYNONYMS)
 
-        # 3. Validate context and decision
-        is_decision_valid = bool(decision_text) and len(decision_text.strip()) >= 15
+        # 3. Validate context and decision (reject lifecycle/status metadata only)
+        is_decision_valid = (
+            bool(decision_text)
+            and len(decision_text.strip()) >= 15
+            and not is_lifecycle_status_only(decision_text)
+        )
         is_context_valid = bool(context_text) and len(context_text.strip()) >= 30
 
         if not is_decision_valid or not is_context_valid:

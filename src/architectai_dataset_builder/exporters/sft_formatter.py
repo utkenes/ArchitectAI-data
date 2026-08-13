@@ -5,6 +5,7 @@ Grounded SFT Multi-Turn Conversation Formatter with Composite Group Provenance
 from typing import Any
 
 from architectai_dataset_builder.models.canonical import ArchitectAISample, TaskType
+from architectai_dataset_builder.utils.markdown import is_lifecycle_status_only
 
 
 class SFTFormatter:
@@ -57,8 +58,8 @@ class SFTFormatter:
 
         response_clean = assistant_response.strip()
 
-        # Reject empty or Not explicitly stated responses
-        if not response_clean or "not explicitly stated" in response_clean.lower():
+        # Reject empty, Not explicitly stated, or status/lifecycle metadata only responses
+        if not response_clean or "not explicitly stated" in response_clean.lower() or is_lifecycle_status_only(response_clean):
             return None
 
         group_id = sample.source.group_id or f"group_{sample.source.source_id}_{sample.source.project_id or 'default'}_{sample.source.source_record_id}"
