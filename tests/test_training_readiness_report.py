@@ -1,6 +1,13 @@
 from pathlib import Path
+
+from architectai_dataset_builder.models.canonical import (
+    ArchitectAISample,
+    ReviewInfo,
+    ReviewStatus,
+    SourceMetadata,
+    TaskType,
+)
 from architectai_dataset_builder.reports.readiness_reporter import ReadinessReporter
-from architectai_dataset_builder.models.canonical import ArchitectAISample, SourceMetadata, TaskType, ReviewInfo, ReviewStatus
 
 
 def test_readiness_report_generation(tmp_path: Path):

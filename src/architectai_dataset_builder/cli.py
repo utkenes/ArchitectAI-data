@@ -4,6 +4,7 @@ ArchitectAI Dataset Builder Command Line Interface
 
 from collections import Counter
 from typing import Any
+
 import click
 
 from architectai_dataset_builder.config import Config
@@ -26,7 +27,10 @@ from architectai_dataset_builder.parsers.training.opendatahub_adr import OpenDat
 from architectai_dataset_builder.parsers.training.r2abench import R2ABenchParser
 from architectai_dataset_builder.reports.readiness_reporter import ReadinessReporter
 from architectai_dataset_builder.reports.stats_generator import StatsGenerator
-from architectai_dataset_builder.sources.downloader import ProductionSourceUnavailableError, SourceDownloader
+from architectai_dataset_builder.sources.downloader import (
+    ProductionSourceUnavailableError,
+    SourceDownloader,
+)
 from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.splitters.contamination_checker import ContaminationChecker
 from architectai_dataset_builder.splitters.deterministic_splitter import DeterministicSplitter
@@ -38,13 +42,11 @@ from architectai_dataset_builder.validators.schema_validator import SchemaValida
 @click.group()
 def cli() -> None:
     """ArchitectAI Dataset Builder CLI"""
-    pass
 
 
 @cli.group()
 def sources() -> None:
     """Manage architecture data sources and manifests."""
-    pass
 
 
 @sources.command(name="list")
@@ -111,7 +113,7 @@ def build_dataset(build_id: str, mode: str) -> None:
         except ProductionSourceUnavailableError as e:
             if mode == "production":
                 click.echo(f"CRITICAL ERROR: {e}")
-                raise e
+                raise
             downloader.fetch_source(sid, mode="fixture")
             source_fetch_modes[sid] = "fixture"
 
@@ -198,7 +200,7 @@ def build_dataset(build_id: str, mode: str) -> None:
     cake_eval = CAKEEvalAdapter().parse_directory(cfg.data_dir / "raw" / "cake")
     archbench_eval = ArchBenchEvalAdapter().parse_directory(cfg.data_dir / "raw" / "archbench")
     r2a_eval = R2ABenchEvalAdapter(
-        held_out_project_ids=splitter.r2abench_splits["held_out"]
+        held_out_project_ids=set(splitter.r2abench_splits["held_out"])
     ).parse_directory(cfg.data_dir / "raw" / "r2abench")
 
     eval_samples = sake_eval + cake_eval + archbench_eval + r2a_eval

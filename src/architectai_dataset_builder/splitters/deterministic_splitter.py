@@ -2,11 +2,11 @@
 Composite Group-Level Deterministic Dataset Splitter
 """
 
-from typing import Tuple
 from pathlib import Path
+
 from architectai_dataset_builder.models.canonical import ArchitectAISample
-from architectai_dataset_builder.utils.io import load_yaml
 from architectai_dataset_builder.utils.hashing import hash_string_to_int
+from architectai_dataset_builder.utils.io import load_yaml
 
 
 class DeterministicSplitter:
@@ -34,7 +34,7 @@ class DeterministicSplitter:
 
     def split_samples(
         self, samples: list[ArchitectAISample]
-    ) -> Tuple[list[ArchitectAISample], list[ArchitectAISample]]:
+    ) -> tuple[list[ArchitectAISample], list[ArchitectAISample]]:
         train_samples: list[ArchitectAISample] = []
         val_samples: list[ArchitectAISample] = []
 

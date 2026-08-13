@@ -6,6 +6,7 @@ If underlying evidence is missing or ambiguous, defaults safely to adr_reasoning
 """
 
 from typing import Any
+
 from architectai_dataset_builder.models.canonical import TaskType
 
 
@@ -24,9 +25,10 @@ class TaskTaxonomyClassifier:
             return TaskType.ARCHITECTURE_GENERATION
 
         # 2. Technology Selection: explicit tech stack evaluation or tool comparison
-        if "technology" in raw_text or "framework" in raw_text or "vendor" in raw_text:
-            if len(options) > 1 or "select" in raw_text or "evaluate" in raw_text:
-                return TaskType.TECHNOLOGY_SELECTION
+        if ("technology" in raw_text or "framework" in raw_text or "vendor" in raw_text) and (
+            len(options) > 1 or "select" in raw_text or "evaluate" in raw_text
+        ):
+            return TaskType.TECHNOLOGY_SELECTION
 
         # 3. Scaling Reasoning: explicit throughput, scaling, volume, or load drivers
         if any(kw in raw_text for kw in ["scaling", "scale", "high throughput", "load balancing", "horizontal pod autoscaler", "sharding"]):

@@ -1,6 +1,13 @@
 from pathlib import Path
+
 from architectai_dataset_builder.exporters.quality_sampler import QualitySampler
-from architectai_dataset_builder.models.canonical import ArchitectAISample, SourceMetadata, TaskType, ReviewInfo, ReviewStatus
+from architectai_dataset_builder.models.canonical import (
+    ArchitectAISample,
+    ReviewInfo,
+    ReviewStatus,
+    SourceMetadata,
+    TaskType,
+)
 
 
 def test_quality_sampler_export(tmp_path: Path):

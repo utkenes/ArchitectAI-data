@@ -3,9 +3,10 @@ Deterministic Quality Sampler across Source/Task Combinations
 """
 
 from pathlib import Path
-from typing import Dict, Any
-from architectai_dataset_builder.models.canonical import ArchitectAISample
+from typing import Any
+
 from architectai_dataset_builder.exporters.sft_formatter import SFTFormatter
+from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.utils.io import write_jsonl
 
 
@@ -18,14 +19,14 @@ class QualitySampler:
     def export_quality_samples(
         self, samples: list[ArchitectAISample], samples_per_pair: int = 1
     ) -> Path:
-        by_pair: Dict[str, list[ArchitectAISample]] = {}
+        by_pair: dict[str, list[ArchitectAISample]] = {}
         for sample in samples:
             pair_key = f"{sample.source.source_id}:{sample.task_type.value}"
             if pair_key not in by_pair:
                 by_pair[pair_key] = []
             by_pair[pair_key].append(sample)
 
-        quality_entries: list[Dict[str, Any]] = []
+        quality_entries: list[dict[str, Any]] = []
         for pair_key, pair_samples in sorted(by_pair.items()):
             for s in pair_samples[:samples_per_pair]:
                 sft_formatted = self.sft_formatter.format_sample(s)

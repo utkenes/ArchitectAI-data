@@ -1,6 +1,13 @@
 from pathlib import Path
+
+from architectai_dataset_builder.models.canonical import (
+    ArchitectAISample,
+    ReviewInfo,
+    ReviewStatus,
+    SourceMetadata,
+    TaskType,
+)
 from architectai_dataset_builder.splitters.deterministic_splitter import DeterministicSplitter
-from architectai_dataset_builder.models.canonical import ArchitectAISample, SourceMetadata, TaskType, ReviewInfo, ReviewStatus
 
 
 def test_group_level_sibling_isolation(tmp_path: Path):

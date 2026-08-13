@@ -4,6 +4,7 @@ Immutable Production Source Downloader and Raw Fixture Manager
 
 import subprocess
 from pathlib import Path
+
 from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
 
@@ -54,7 +55,7 @@ class SourceDownloader:
                 ["git", "clone", "--depth", "1", "--branch", revision, repo_url, str(dest_dir)],
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=120,
                 check=False,
             )
             if res.returncode == 0:
@@ -64,7 +65,7 @@ class SourceDownloader:
                 ["git", "clone", "--depth", "1", repo_url, str(dest_dir)],
                 capture_output=True,
                 text=True,
-                timeout=60,
+                timeout=120,
                 check=False,
             )
             return res_default.returncode == 0

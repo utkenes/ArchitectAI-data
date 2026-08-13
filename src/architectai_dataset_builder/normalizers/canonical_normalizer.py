@@ -2,15 +2,16 @@
 Canonical Sample Normalizer with Evidence Grounding and Composite Group IDs
 """
 
-from datetime import datetime, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime
+from typing import Any
+
 from architectai_dataset_builder.models.canonical import (
-    ArchitectAISample,
-    SourceMetadata,
     Alternative,
+    ArchitectAISample,
     RecommendedArchitecture,
     ReviewInfo,
     ReviewStatus,
+    SourceMetadata,
 )
 from architectai_dataset_builder.models.evidence import EvidenceItem, EvidenceType
 from architectai_dataset_builder.models.manifest import SourceManifest
@@ -26,7 +27,7 @@ class CanonicalNormalizer:
         self,
         parsed_record: dict[str, Any],
         manifest: SourceManifest,
-        split: Optional[str] = None,
+        split: str | None = None,
     ) -> ArchitectAISample:
         sample_id = parsed_record["sample_id"]
         raw_hash = parsed_record["raw_sha256"]
@@ -60,7 +61,7 @@ class CanonicalNormalizer:
             normalized_sha256=norm_hash,
             split=split,
             kep_status=kep_status,
-            created_at=datetime.now(timezone.utc).isoformat(),
+            created_at=datetime.now(UTC).isoformat(),
         )
 
         # 4. Grounded Context & Facts

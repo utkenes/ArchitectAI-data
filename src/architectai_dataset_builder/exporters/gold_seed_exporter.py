@@ -3,7 +3,8 @@ Gold Seed Candidate Exporter for Human Review Workflow
 """
 
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
+
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.utils.io import write_jsonl
 
@@ -16,7 +17,7 @@ class GoldSeedExporter:
     def export_review_candidates(
         self, samples: list[ArchitectAISample], candidates_per_task: int = 2
     ) -> Path:
-        by_task: Dict[str, list[ArchitectAISample]] = {}
+        by_task: dict[str, list[ArchitectAISample]] = {}
         for sample in samples:
             t = sample.task_type.value
             if t not in by_task:
@@ -24,9 +25,9 @@ class GoldSeedExporter:
             by_task[t].append(sample)
 
         candidates = []
-        for task, task_samples in by_task.items():
+        for task_samples in by_task.values():
             for s in task_samples[:candidates_per_task]:
-                candidate_entry: Dict[str, Any] = {
+                candidate_entry: dict[str, Any] = {
                     "sample_id": s.id,
                     "group_id": s.source.group_id,
                     "source_id": s.source.source_id,

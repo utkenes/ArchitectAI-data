@@ -1,5 +1,5 @@
 """
-R2ABench Evaluation Adapter -> DiagramEvalSample (for Held-Out Projects)
+R2ABench Evaluation Adapter -> DiagramEvalSample (Held-Out Evaluation)
 """
 
 from pathlib import Path
@@ -11,25 +11,25 @@ from architectai_dataset_builder.utils.identity import generate_stable_sample_id
 
 class R2ABenchEvalAdapter:
     def __init__(self, held_out_project_ids: set[str]):
-        self.benchmark_id = "r2abench_holdout"
-        self.held_out_project_ids = held_out_project_ids
+        self.benchmark_id = "r2abench"
+        self.held_out_project_ids = set(held_out_project_ids)
 
     def parse_directory(self, raw_dir: Path) -> list[DiagramEvalSample]:
-        samples = []
-        req_files = sorted(raw_dir.glob("*_req.txt")) + sorted(raw_dir.glob("*.txt"))
-        for req_file in req_files:
+        samples: list[DiagramEvalSample] = []
+
+        for req_file in sorted(raw_dir.glob("*_req.txt")) + sorted(raw_dir.glob("*.txt")):
             if not req_file.is_file():
                 continue
             project_id = req_file.stem.replace("_req", "")
             if project_id not in self.held_out_project_ids:
-                continue  # Skip training/validation split projects
+                continue
 
             arch_file = raw_dir / f"{project_id}_arch.puml"
             if not arch_file.exists():
                 arch_file = raw_dir / f"{project_id}.puml"
 
-            arch_text = arch_file.read_text(encoding="utf-8") if arch_file.exists() else ""
-            req_text = req_file.read_text(encoding="utf-8")
+            arch_text = arch_file.read_text(encoding="utf-8", errors="ignore") if arch_file.exists() else ""
+            req_text = req_file.read_text(encoding="utf-8", errors="ignore")
             raw_hash = compute_sha256_file(req_file)
 
             sample_id = generate_stable_sample_id(
@@ -39,7 +39,6 @@ class R2ABenchEvalAdapter:
                 project_id=project_id,
                 prefix="eval_r2a_",
             )
-
             norm_hash = compute_sha256_str(f"{req_text}:{arch_text}")
 
             source_meta = EvalSourceMetadata(
@@ -56,7 +55,6 @@ class R2ABenchEvalAdapter:
                 DiagramEvalSample(
                     id=sample_id,
                     source=source_meta,
-                    project_id=project_id,
                     requirements_text=req_text,
                     reference_plantuml=arch_text,
                     diagram_type="component",

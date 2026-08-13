@@ -3,7 +3,8 @@ Automated Training Readiness Reporter for ArchitectAI Model Fine-Tuning Gate
 """
 
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Any
+
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.utils.io import write_jsonl
 
@@ -11,8 +12,8 @@ from architectai_dataset_builder.utils.io import write_jsonl
 class ReadinessReporter:
     def generate_report(
         self,
-        train_samples: List[ArchitectAISample],
-        val_samples: List[ArchitectAISample],
+        train_samples: list[ArchitectAISample],
+        val_samples: list[ArchitectAISample],
         eval_samples_count: int,
         quarantine_count: int,
         failed_parse_count: int,
@@ -20,13 +21,13 @@ class ReadinessReporter:
         near_dups: int,
         has_contamination: bool,
         output_file: Path,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         all_samples = train_samples + val_samples
         total_silver = len(all_samples)
 
-        source_dist: Dict[str, int] = {}
-        task_dist: Dict[str, int] = {}
-        license_dist: Dict[str, int] = {}
+        source_dist: dict[str, int] = {}
+        task_dist: dict[str, int] = {}
+        license_dist: dict[str, int] = {}
 
         for s in all_samples:
             src = s.source.source_id
@@ -42,8 +43,8 @@ class ReadinessReporter:
         exact_dup_rate = round(exact_dups / max(total_silver, 1), 4)
         near_dup_rate = round(near_dups / max(total_silver, 1), 4)
 
-        blocking_reasons: List[str] = []
-        warnings: List[str] = []
+        blocking_reasons: list[str] = []
+        warnings: list[str] = []
 
         if has_contamination:
             blocking_reasons.append("Cross-split contamination detected between train and eval sets!")
@@ -66,7 +67,7 @@ class ReadinessReporter:
         else:
             status = "READY"
 
-        report: Dict[str, Any] = {
+        report: dict[str, Any] = {
             "readiness_status": status,
             "total_silver_samples": total_silver,
             "train_samples": len(train_samples),

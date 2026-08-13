@@ -1,4 +1,5 @@
 from click.testing import CliRunner
+
 from architectai_dataset_builder.cli import build_dataset
 from architectai_dataset_builder.config import Config
 

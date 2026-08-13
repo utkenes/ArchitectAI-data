@@ -2,7 +2,8 @@
 Grounded SFT Multi-Turn Conversation Formatter with Composite Group Provenance
 """
 
-from typing import Any, Dict
+from typing import Any
+
 from architectai_dataset_builder.models.canonical import ArchitectAISample, TaskType
 
 
@@ -14,7 +15,7 @@ class SFTFormatter:
         "Provide evidence-grounded architectural recommendations, tradeoff analyses, and design decisions."
     )
 
-    def format_sample(self, sample: ArchitectAISample) -> Dict[str, Any]:
+    def format_sample(self, sample: ArchitectAISample) -> dict[str, Any]:
         user_prompt = f"### Architectural Scenario:\n{sample.scenario}\n\n"
 
         if sample.facts:

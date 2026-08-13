@@ -2,7 +2,6 @@
 Protected Evaluation Benchmark Data Models with Ingestion Metrics Tracking
 """
 
-from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
@@ -22,7 +21,7 @@ class MultipleChoiceEvalSample(BaseModel):
     question: str
     options: dict[str, str]
     correct_answer: str
-    explanation: Optional[str] = None
+    explanation: str | None = None
 
 
 class FreeResponseEvalSample(BaseModel):
@@ -31,7 +30,7 @@ class FreeResponseEvalSample(BaseModel):
     prompt: str
     reference_answer: str
     grading_rubric: list[str] = Field(default_factory=list)
-    context: Optional[str] = None
+    context: str | None = None
 
 
 class ArchitectureGenerationEvalSample(BaseModel):
