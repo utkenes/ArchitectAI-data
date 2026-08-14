@@ -1,5 +1,5 @@
 """
-Evidence-Grounded Task Taxonomy Classifier V2
+Evidence-Grounded Task Taxonomy Classifier V2.1
 
 Rule: A task_type is assigned ONLY if the raw source evidence explicitly satisfies
 the evidence contract for that task. If evidence is missing or ambiguous,
@@ -48,33 +48,84 @@ SCALING_RESPONSES = [
     r"\bhpa\b",
 ]
 
-TECH_TERMS = [
-    r"\bpostgresql\b", r"\bmysql\b", r"\bmongodb\b", r"\bredis\b", r"\bkafka\b",
-    r"\brabbitmq\b", r"\bgrpc\b", r"\brest\b", r"\bgraphql\b", r"\bdocker\b",
-    r"\bkubernetes\b", r"\benvoy\b", r"\bnginx\b", r"\bprometheus\b", r"\belasticsearch\b",
-    r"\bvendor\b", r"\bdatabase\b", r"\bframework\b",
+CONCRETE_TECH_TERMS = [
+    r"\bpostgresql\b",
+    r"\bmysql\b",
+    r"\bmongodb\b",
+    r"\bredis\b",
+    r"\bkafka\b",
+    r"\brabbitmq\b",
+    r"\bgrpc\b",
+    r"\brest\b",
+    r"\bgraphql\b",
+    r"\bdocker\b",
+    r"\bkubernetes\b",
+    r"\benvoy\b",
+    r"\bnginx\b",
+    r"\bprometheus\b",
+    r"\belasticsearch\b",
+    r"\bistio\b",
+    r"\baws\b",
+    r"\bazure\b",
+    r"\bgcp\b",
+    r"\bspanner\b",
+    r"\bcockroachdb\b",
+]
+
+GENERIC_TECH_CATEGORIES = [
+    r"\bvendor\b",
+    r"\bdatabase\b",
+    r"\bframework\b",
+    r"\btechnology\b",
+    r"\bplatform\b",
+    r"\blibrary\b",
+    r"\btool\b",
+    r"\bdriver\b",
 ]
 
 TECH_COMPARISONS = [
-    r"\bversus\b", r"\bvs\.?\b", r"\bcompared to\b", r"\bcompared with\b",
-    r"\bevaluated\b", r"\bevaluating\b", r"\bbenchmark\b", r"\bselected over\b",
-    r"\brejected in favor of\b", r"\balternative to\b", r"\btradeoff between\b",
+    r"\bversus\b",
+    r"\bvs\.?\b",
+    r"\bcompared to\b",
+    r"\bcompared with\b",
+    r"\bevaluated\b",
+    r"\bevaluating\b",
+    r"\bbenchmark\b",
+    r"\bselected over\b",
+    r"\brejected in favor of\b",
+    r"\balternative to\b",
+    r"\btradeoff between\b",
 ]
 
 QUALITY_ATTRIBUTES = [
-    r"\bavailability\b", r"\blatency\b", r"\breliability\b", r"\bsecurity\b",
-    r"\bresilience\b", r"\bconsistency\b", r"\bperformance\b",
+    r"\bavailability\b",
+    r"\blatency\b",
+    r"\breliability\b",
+    r"\bsecurity\b",
+    r"\bresilience\b",
+    r"\bconsistency\b",
+    r"\bperformance\b",
 ]
 
 QUALITY_REASONING_INDICATORS = [
-    r"\bnfr\b", r"\bnon-functional requirement\b", r"\bsla\b", r"\bslo\b",
-    r"\bquality attribute\b", r"\btrade-off between\b", r"\bguarantee\b",
-    r"\bavailability target\b", r"\blatency budget\b",
+    r"\bnfr\b",
+    r"\bnon-functional requirement\b",
+    r"\bsla\b",
+    r"\bslo\b",
+    r"\bquality attribute\b",
+    r"\btrade-off between\b",
+    r"\bguarantee\b",
+    r"\bavailability target\b",
+    r"\blatency budget\b",
 ]
 
 TRADEOFF_INDICATORS = [
-    r"\btrade-off\b", r"\btradeoff\b", r"\bpros and cons\b", r"\badvantages and disadvantages\b",
-    r"\bcost-benefit\b", r"\bmitigation\b",
+    r"\btrade-off\b",
+    r"\btradeoff\b",
+    r"\bpros and cons\b",
+    r"\badvantages and disadvantages\b",
+    r"\bcost-benefit\b",
+    r"\bmitigation\b",
 ]
 
 
@@ -91,7 +142,12 @@ class TaskTaxonomyClassifier:
         summary = parsed_record.get("summary", "").lower()
         motivation = parsed_record.get("motivation", "").lower()
         context = parsed_record.get("context", "").lower()
-        decision = (parsed_record.get("decision_outcome") or parsed_record.get("decision") or parsed_record.get("proposal") or "").lower()
+        decision = (
+            parsed_record.get("decision_outcome")
+            or parsed_record.get("decision")
+            or parsed_record.get("proposal")
+            or ""
+        ).lower()
 
         # 1. Architecture Generation: explicit PlantUML or diagram code
         if plantuml or "@startuml" in raw_text:
@@ -114,15 +170,21 @@ class TaskTaxonomyClassifier:
                 ],
             )
 
-        # 3. Technology Selection: Explicit tech choices AND comparison/evaluation evidence
-        tech_matches = [p for p in TECH_TERMS if re.search(p, raw_text)]
+        # 3. Technology Selection: Concrete tech terms + (comparison or 2+ options), OR Generic category + comparison
+        concrete_matches = [p for p in CONCRETE_TECH_TERMS if re.search(p, raw_text)]
+        generic_matches = [p for p in GENERIC_TECH_CATEGORIES if re.search(p, raw_text)]
         comp_matches = [p for p in TECH_COMPARISONS if re.search(p, raw_text)]
-        if tech_matches and (comp_matches or len(options) >= 2):
+
+        is_concrete_tech_selection = bool(concrete_matches) and bool(comp_matches or len(options) >= 2)
+        is_generic_tech_selection = bool(generic_matches) and bool(comp_matches)
+
+        if is_concrete_tech_selection or is_generic_tech_selection:
+            matched_terms = concrete_matches or generic_matches
             return ClassificationResult(
                 task_type=TaskType.TECHNOLOGY_SELECTION,
                 confidence=0.88,
                 evidence=[
-                    f"Technology terms: {', '.join(tech_matches[:2])}",
+                    f"Technology terms: {', '.join(matched_terms[:2])}",
                     f"Comparison evidence: {comp_matches[0] if comp_matches else 'multiple options'}",
                 ],
             )
