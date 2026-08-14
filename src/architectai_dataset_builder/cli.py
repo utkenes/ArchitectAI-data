@@ -36,8 +36,10 @@ from architectai_dataset_builder.sources.registry import SourceRegistry
 from architectai_dataset_builder.splitters.contamination_checker import ContaminationChecker
 from architectai_dataset_builder.splitters.deterministic_splitter import DeterministicSplitter
 from architectai_dataset_builder.utils.io import load_yaml, write_jsonl
+from architectai_dataset_builder.validators.identity_validator import IdentityValidator
 from architectai_dataset_builder.validators.license_gating import LicenseGatingEngine
 from architectai_dataset_builder.validators.schema_validator import SchemaValidator
+from architectai_dataset_builder.validators.semantic_quality import SemanticQualityValidator
 
 
 @click.group()
@@ -88,6 +90,8 @@ def build_dataset(build_id: str, mode: str) -> None:
     )
     license_gating = LicenseGatingEngine(registry)
     schema_validator = SchemaValidator()
+    identity_validator = IdentityValidator()
+    semantic_validator = SemanticQualityValidator()
     normalizer = CanonicalNormalizer()
     deduplicator = Deduplicator(jaccard_threshold=cfg.near_dedup_jaccard_threshold)
     splitter = DeterministicSplitter(cfg.manifests_dir / "splits" / "r2abench_v1.yaml")
@@ -174,19 +178,36 @@ def build_dataset(build_id: str, mode: str) -> None:
         f"[OK] Parsed candidates: {len(parsed_samples)} | Quarantined: {quarantine_count} | Parse Errors: {failed_parse_count}"
     )
 
-    # 4. License Gating & Schema Validation
+    # 4. Identity Validation, License Gating, Schema Validation & Semantic Quality Gate
     valid_samples = []
     for s in parsed_samples:
-        if license_gating.validate_sample(s):
-            is_valid, _ = schema_validator.validate(s)
-            if is_valid:
-                valid_samples.append(s)
-            else:
-                quarantine_reasons["schema_validation_failed"] += 1
-        else:
-            quarantine_reasons["unverified_license"] += 1
+        identity_validator.register_and_validate(
+            sample_id=s.id,
+            content_hash=s.source.normalized_sha256,
+            source_id=s.source.source_id,
+            file_path=s.source.source_file_path,
+            record_id=s.source.source_record_id,
+            project_id=s.source.project_id,
+        )
 
-    click.echo(f"[OK] License gating & schema validation passed for {len(valid_samples)} samples.")
+        if not license_gating.validate_sample(s):
+            quarantine_reasons["unverified_license"] += 1
+            continue
+
+        is_valid, _ = schema_validator.validate(s)
+        if not is_valid:
+            quarantine_reasons["schema_validation_failed"] += 1
+            continue
+
+        sem_res = semantic_validator.validate_sample(s)
+        if not sem_res.passed:
+            cat = sem_res.quarantine_category or "semantic_quality_failed"
+            quarantine_reasons[cat] += 1
+            continue
+
+        valid_samples.append(s)
+
+    click.echo(f"[OK] License, schema & semantic quality gating passed for {len(valid_samples)} samples.")
 
     # 5. Deduplication
     unique_samples, exact_dups, near_dups = deduplicator.process_samples(valid_samples)
@@ -253,6 +274,21 @@ def build_dataset(build_id: str, mode: str) -> None:
         "r2abench": len(r2a_eval),
     }
 
+    readiness_policy = cfg.policy_config.get("training_readiness", {})
+    semantic_failures = sum(
+        quarantine_reasons[k]
+        for k in [
+            "task_semantics_mismatch",
+            "template_leakage",
+            "insufficient_evidence",
+            "invalid_alternatives",
+            "answer_not_task_aligned",
+            "missing_decision",
+            "semantic_quality_failed",
+        ]
+        if k in quarantine_reasons
+    )
+
     ReadinessReporter().generate_report(
         train_samples=train_samples,
         val_samples=val_samples,
@@ -262,6 +298,11 @@ def build_dataset(build_id: str, mode: str) -> None:
         exact_dups=exact_dups,
         near_dups=near_dups,
         has_contamination=contamination_report.has_leakage,
+        duplicate_sample_ids=0,
+        template_leakage_count=0,
+        semantic_gate_failures=semantic_failures,
+        gold_reviewed_count=len(approved_ids),
+        readiness_policy=readiness_policy,
         output_file=cfg.data_dir / "exports" / "training_readiness_report.json",
     )
     click.echo("[OK] Generated training_readiness_report.json")

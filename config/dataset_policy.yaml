@@ -36,3 +36,12 @@ relevance_filter:
     - multi-tenancy
     - performance
     - cache
+
+training_readiness:
+  min_gold_samples: 30
+  min_eval_samples: 30
+  max_duplicate_ids: 0
+  max_template_leakage: 0
+  max_semantic_failures_exported: 0
+  require_manual_review: true
+  max_single_source_ratio: 0.80
