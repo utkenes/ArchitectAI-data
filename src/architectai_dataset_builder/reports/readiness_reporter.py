@@ -1,5 +1,5 @@
 """
-Automated Training Readiness Reporter V2 for ArchitectAI Model Fine-Tuning Gate
+Automated Training Readiness Reporter V2.1 for ArchitectAI Model Fine-Tuning Gate
 """
 
 from pathlib import Path
@@ -7,11 +7,12 @@ from typing import Any
 
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.utils.io import write_jsonl
+from architectai_dataset_builder.validators.sft_export_validator import ExportValidationResult
 
 
 class ReadinessReporter:
     """
-    Computes measurable training readiness criteria based on actual dataset metrics and policies.
+    Computes measurable training readiness criteria based on actual dataset metrics and export validation.
     Statuses: BUILD_INVALID, BUILD_VALID_REVIEW_REQUIRED, TRAINING_READY
     """
 
@@ -25,10 +26,9 @@ class ReadinessReporter:
         exact_dups: int = 0,
         near_dups: int = 0,
         has_contamination: bool = False,
-        duplicate_sample_ids: int = 0,
-        template_leakage_count: int = 0,
-        semantic_gate_failures: int = 0,
         gold_reviewed_count: int = 0,
+        manual_review_completed: bool = False,
+        export_validation_result: ExportValidationResult | dict[str, Any] | None = None,
         readiness_policy: dict[str, Any] | None = None,
         output_file: Path | None = None,
     ) -> dict[str, Any]:
@@ -37,6 +37,29 @@ class ReadinessReporter:
         min_eval = policy.get("min_eval_samples", 30)
         max_source_ratio = policy.get("max_single_source_ratio", 0.80)
         require_manual_review = policy.get("require_manual_review", True)
+
+        max_duplicate_ids = policy.get("max_duplicate_ids", 0)
+        max_conflicting_ids = policy.get("max_conflicting_duplicate_ids", 0)
+        max_template_leakage = policy.get("max_template_leakage", 0)
+        max_placeholders = policy.get("max_unresolved_placeholders", 0)
+        max_empty_answers = policy.get("max_empty_assistant_answers", 0)
+        max_semantic_failures = policy.get("max_semantic_failures_exported", 0)
+
+        # Process export validation metrics
+        if isinstance(export_validation_result, ExportValidationResult):
+            val_res = export_validation_result.model_dump()
+        elif isinstance(export_validation_result, dict):
+            val_res = export_validation_result
+        else:
+            val_res = {}
+
+        duplicate_ids = val_res.get("duplicate_sample_ids", 0)
+        conflicting_ids = val_res.get("conflicting_duplicate_sample_ids", 0)
+        template_leakage_count = val_res.get("template_leakage_count", 0)
+        unresolved_placeholders = val_res.get("unresolved_placeholder_count", 0)
+        empty_assistant_answers = val_res.get("empty_assistant_answers", 0)
+        semantic_failures_exported = val_res.get("semantic_failures_exported", 0)
+        group_overlap_count = val_res.get("group_overlap_count", 0)
 
         all_samples = train_samples + val_samples
         total_silver = len(all_samples)
@@ -60,12 +83,12 @@ class ReadinessReporter:
             if not s.decisions and not (s.recommended_architecture and s.recommended_architecture.summary):
                 missing_evidence_counts += 1
 
-        # Calculate Group Split Integrity (overlap check)
+        # Group Split Integrity
         train_groups = {s.source.group_id for s in train_samples if s.source.group_id}
         val_groups = {s.source.group_id for s in val_samples if s.source.group_id}
-        group_overlap = len(train_groups.intersection(val_groups))
+        group_overlap = len(train_groups.intersection(val_groups)) + group_overlap_count
 
-        # Calculate Source Concentration Ratio
+        # Source Concentration Ratio
         max_source_count = max(source_dist.values()) if source_dist else 0
         source_concentration_ratio = round(max_source_count / max(total_silver, 1), 4)
 
@@ -80,15 +103,27 @@ class ReadinessReporter:
         blocking_reasons: list[str] = []
         warnings: list[str] = []
 
-        # Structural & Hard Validation Failures
+        # 1. Hard Structural & Export Gate Failures
         if has_contamination:
             blocking_reasons.append("Cross-split contamination detected between train and eval sets!")
 
-        if duplicate_sample_ids > 0:
-            blocking_reasons.append(f"Duplicate sample IDs detected ({duplicate_sample_ids})!")
+        if conflicting_ids > max_conflicting_ids:
+            blocking_reasons.append(f"Conflicting duplicate sample IDs detected ({conflicting_ids} > {max_conflicting_ids})!")
 
-        if template_leakage_count > 0:
-            blocking_reasons.append(f"Template leakage detected in exported SFT data ({template_leakage_count})!")
+        if duplicate_ids > max_duplicate_ids:
+            blocking_reasons.append(f"Duplicate sample IDs detected ({duplicate_ids} > {max_duplicate_ids})!")
+
+        if template_leakage_count > max_template_leakage:
+            blocking_reasons.append(f"Template leakage detected in exported SFT data ({template_leakage_count} > {max_template_leakage})!")
+
+        if unresolved_placeholders > max_placeholders:
+            blocking_reasons.append(f"Unresolved placeholders in exported SFT data ({unresolved_placeholders} > {max_placeholders})!")
+
+        if empty_assistant_answers > max_empty_answers:
+            blocking_reasons.append(f"Empty assistant answers in exported SFT data ({empty_assistant_answers} > {max_empty_answers})!")
+
+        if semantic_failures_exported > max_semantic_failures:
+            blocking_reasons.append(f"Semantic failures in exported SFT data ({semantic_failures_exported} > {max_semantic_failures})!")
 
         if group_overlap > 0:
             blocking_reasons.append(f"Train/validation group leakage detected ({group_overlap} overlapping groups)!")
@@ -96,7 +131,7 @@ class ReadinessReporter:
         if total_silver == 0:
             blocking_reasons.append("No valid silver training samples produced.")
 
-        # Determine Readiness Status
+        # 2. Readiness Status Evaluation
         if blocking_reasons:
             status = "BUILD_INVALID"
         else:
@@ -118,9 +153,9 @@ class ReadinessReporter:
             if parse_failure_rate > 0.05:
                 warnings.append(f"High parse failure rate: {parse_failure_rate * 100:.1f}%")
 
-            if require_manual_review:
+            if require_manual_review and not manual_review_completed:
                 warnings.append(
-                    "Manual Quality Gate: Review quality_review_samples.jsonl before starting GPU model fine-tuning."
+                    "Manual Quality Gate: Review quality_review_samples.jsonl and complete signoff before GPU model fine-tuning."
                 )
 
             if warnings:
@@ -136,6 +171,7 @@ class ReadinessReporter:
             "train_samples": len(train_samples),
             "validation_samples": len(val_samples),
             "gold_samples": gold_reviewed_count,
+            "manual_review_completed": manual_review_completed,
             "evaluation_counts": eval_summary,
             "source_distribution": source_dist,
             "source_concentration_ratio": source_concentration_ratio,
@@ -145,9 +181,12 @@ class ReadinessReporter:
             "parse_failure_rate": parse_failure_rate,
             "exact_duplicate_rate": exact_dup_rate,
             "near_duplicate_rate": near_dup_rate,
-            "duplicate_sample_ids": duplicate_sample_ids,
+            "duplicate_sample_ids": duplicate_ids,
+            "conflicting_duplicate_sample_ids": conflicting_ids,
             "template_leakage_count": template_leakage_count,
-            "semantic_gate_failures": semantic_gate_failures,
+            "unresolved_placeholder_count": unresolved_placeholders,
+            "empty_assistant_answers": empty_assistant_answers,
+            "semantic_failures_exported": semantic_failures_exported,
             "unsupported_task_counts": unsupported_task_counts,
             "missing_evidence_counts": missing_evidence_counts,
             "group_split_integrity": "FAILED" if group_overlap > 0 else "PASSED",

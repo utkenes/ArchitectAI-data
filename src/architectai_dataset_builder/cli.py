@@ -40,6 +40,7 @@ from architectai_dataset_builder.validators.identity_validator import IdentityVa
 from architectai_dataset_builder.validators.license_gating import LicenseGatingEngine
 from architectai_dataset_builder.validators.schema_validator import SchemaValidator
 from architectai_dataset_builder.validators.semantic_quality import SemanticQualityValidator
+from architectai_dataset_builder.validators.sft_export_validator import SFTExportValidator
 
 
 @click.group()
@@ -240,6 +241,7 @@ def build_dataset(build_id: str, mode: str) -> None:
     # 9. Exporters & Manifests
     approved_manifest = load_yaml(cfg.manifests_dir / "reviews" / "approved_samples.yaml")
     approved_ids = [entry["sample_id"] for entry in approved_manifest.get("approved_samples", [])]
+    manual_review_completed = bool(approved_manifest.get("manual_review_completed", False))
 
     exporter = JSONLExporter(cfg.data_dir / "exports")
     train_export_paths = exporter.export_training_datasets(train_samples, val_samples, approved_ids)
@@ -250,9 +252,18 @@ def build_dataset(build_id: str, mode: str) -> None:
     QualitySampler(cfg.data_dir / "exports").export_quality_samples(unique_samples)
     click.echo("[OK] Exported gold_review_candidates.jsonl and quality_review_samples.jsonl")
 
+    # 11. Final SFT Export Validation
+    export_validator = SFTExportValidator()
+    export_val_result = export_validator.validate_exports(cfg.data_dir / "exports")
+    click.echo(
+        f"[OK] SFT Export Validation: {export_val_result.total_exported_samples} exported samples "
+        f"({export_val_result.template_leakage_count} leaks, {export_val_result.duplicate_sample_ids} dups, "
+        f"{export_val_result.empty_assistant_answers} empty answers)."
+    )
+
     all_export_paths = {**train_export_paths, **eval_export_paths}
 
-    # 11. Reports
+    # 12. Reports
     stats_gen = StatsGenerator()
     stats_gen.generate_stats(
         train_samples,
@@ -275,19 +286,6 @@ def build_dataset(build_id: str, mode: str) -> None:
     }
 
     readiness_policy = cfg.policy_config.get("training_readiness", {})
-    semantic_failures = sum(
-        quarantine_reasons[k]
-        for k in [
-            "task_semantics_mismatch",
-            "template_leakage",
-            "insufficient_evidence",
-            "invalid_alternatives",
-            "answer_not_task_aligned",
-            "missing_decision",
-            "semantic_quality_failed",
-        ]
-        if k in quarantine_reasons
-    )
 
     ReadinessReporter().generate_report(
         train_samples=train_samples,
@@ -298,10 +296,9 @@ def build_dataset(build_id: str, mode: str) -> None:
         exact_dups=exact_dups,
         near_dups=near_dups,
         has_contamination=contamination_report.has_leakage,
-        duplicate_sample_ids=0,
-        template_leakage_count=0,
-        semantic_gate_failures=semantic_failures,
         gold_reviewed_count=len(approved_ids),
+        manual_review_completed=manual_review_completed,
+        export_validation_result=export_val_result,
         readiness_policy=readiness_policy,
         output_file=cfg.data_dir / "exports" / "training_readiness_report.json",
     )
