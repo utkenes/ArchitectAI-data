@@ -1,17 +1,88 @@
 """
-Evidence-Grounded Task Taxonomy Classifier
+Evidence-Grounded Task Taxonomy Classifier V2
 
-Rule: A task_type is assigned ONLY if the raw source evidence explicitly supports it.
-If underlying evidence is missing or ambiguous, defaults safely to adr_reasoning or architecture_explanation.
+Rule: A task_type is assigned ONLY if the raw source evidence explicitly satisfies
+the evidence contract for that task. If evidence is missing or ambiguous,
+the classifier falls back conservatively to adr_reasoning or architecture_explanation.
 """
 
+from dataclasses import dataclass, field
+import re
 from typing import Any
 
 from architectai_dataset_builder.models.canonical import TaskType
 
 
+@dataclass
+class ClassificationResult:
+    task_type: TaskType
+    confidence: float
+    evidence: list[str] = field(default_factory=list)
+
+
+SCALING_DRIVERS = [
+    r"\bthroughput\b",
+    r"\bconcurrent users\b",
+    r"\bdata volume\b",
+    r"\bqueue depth\b",
+    r"\bworkload growth\b",
+    r"\bhorizontal capacity\b",
+    r"\bpartition pressure\b",
+    r"\bresource saturation\b",
+    r"\brequest volume\b",
+    r"\bpeak load\b",
+    r"\bscale out\b",
+    r"\bhigh load\b",
+]
+
+SCALING_RESPONSES = [
+    r"\bpartitioning\b",
+    r"\bsharding\b",
+    r"\bcaching\b",
+    r"\bqueueing\b",
+    r"\bload balancing\b",
+    r"\breplication\b",
+    r"\bautoscaling\b",
+    r"\bworkload isolation\b",
+    r"\bhorizontal pod autoscaler\b",
+    r"\bhpa\b",
+]
+
+TECH_TERMS = [
+    r"\bpostgresql\b", r"\bmysql\b", r"\bmongodb\b", r"\bredis\b", r"\bkafka\b",
+    r"\brabbitmq\b", r"\bgrpc\b", r"\brest\b", r"\bgraphql\b", r"\bdocker\b",
+    r"\bkubernetes\b", r"\benvoy\b", r"\bnginx\b", r"\bprometheus\b", r"\belasticsearch\b",
+    r"\bvendor\b", r"\bdatabase\b", r"\bframework\b",
+]
+
+TECH_COMPARISONS = [
+    r"\bversus\b", r"\bvs\.?\b", r"\bcompared to\b", r"\bcompared with\b",
+    r"\bevaluated\b", r"\bevaluating\b", r"\bbenchmark\b", r"\bselected over\b",
+    r"\brejected in favor of\b", r"\balternative to\b", r"\btradeoff between\b",
+]
+
+QUALITY_ATTRIBUTES = [
+    r"\bavailability\b", r"\blatency\b", r"\breliability\b", r"\bsecurity\b",
+    r"\bresilience\b", r"\bconsistency\b", r"\bperformance\b",
+]
+
+QUALITY_REASONING_INDICATORS = [
+    r"\bnfr\b", r"\bnon-functional requirement\b", r"\bsla\b", r"\bslo\b",
+    r"\bquality attribute\b", r"\btrade-off between\b", r"\bguarantee\b",
+    r"\bavailability target\b", r"\blatency budget\b",
+]
+
+TRADEOFF_INDICATORS = [
+    r"\btrade-off\b", r"\btradeoff\b", r"\bpros and cons\b", r"\badvantages and disadvantages\b",
+    r"\bcost-benefit\b", r"\bmitigation\b",
+]
+
+
 class TaskTaxonomyClassifier:
     def classify(self, parsed_record: dict[str, Any]) -> TaskType:
+        return self.classify_with_evidence(parsed_record).task_type
+
+    def classify_with_evidence(self, parsed_record: dict[str, Any]) -> ClassificationResult:
         raw_text = parsed_record.get("raw_text", "").lower()
         options = parsed_record.get("options", []) or parsed_record.get("alternatives", [])
         positive = parsed_record.get("positive_consequences", [])
@@ -19,38 +90,81 @@ class TaskTaxonomyClassifier:
         plantuml = parsed_record.get("plantuml_text", "")
         summary = parsed_record.get("summary", "").lower()
         motivation = parsed_record.get("motivation", "").lower()
+        context = parsed_record.get("context", "").lower()
+        decision = (parsed_record.get("decision_outcome") or parsed_record.get("decision") or parsed_record.get("proposal") or "").lower()
 
         # 1. Architecture Generation: explicit PlantUML or diagram code
         if plantuml or "@startuml" in raw_text:
-            return TaskType.ARCHITECTURE_GENERATION
+            return ClassificationResult(
+                task_type=TaskType.ARCHITECTURE_GENERATION,
+                confidence=1.0,
+                evidence=["Explicit PlantUML architecture specification"],
+            )
 
-        # 2. Technology Selection: explicit tech stack evaluation or tool comparison
-        if ("technology" in raw_text or "framework" in raw_text or "vendor" in raw_text) and (
-            len(options) > 1 or "select" in raw_text or "evaluate" in raw_text
-        ):
-            return TaskType.TECHNOLOGY_SELECTION
+        # 2. Scaling Reasoning: Real capacity/load driver AND architectural response
+        driver_matches = [p for p in SCALING_DRIVERS if re.search(p, raw_text)]
+        response_matches = [p for p in SCALING_RESPONSES if re.search(p, raw_text)]
+        if driver_matches and response_matches:
+            return ClassificationResult(
+                task_type=TaskType.SCALING_REASONING,
+                confidence=0.91,
+                evidence=[
+                    f"Scaling driver matched: {', '.join(driver_matches[:2])}",
+                    f"Architectural response matched: {', '.join(response_matches[:2])}",
+                ],
+            )
 
-        # 3. Scaling Reasoning: explicit throughput, scaling, volume, or load drivers
-        if any(kw in raw_text for kw in ["scaling", "scale", "high throughput", "load balancing", "horizontal pod autoscaler", "sharding"]):
-            return TaskType.SCALING_REASONING
+        # 3. Technology Selection: Explicit tech choices AND comparison/evaluation evidence
+        tech_matches = [p for p in TECH_TERMS if re.search(p, raw_text)]
+        comp_matches = [p for p in TECH_COMPARISONS if re.search(p, raw_text)]
+        if tech_matches and (comp_matches or len(options) >= 2):
+            return ClassificationResult(
+                task_type=TaskType.TECHNOLOGY_SELECTION,
+                confidence=0.88,
+                evidence=[
+                    f"Technology terms: {', '.join(tech_matches[:2])}",
+                    f"Comparison evidence: {comp_matches[0] if comp_matches else 'multiple options'}",
+                ],
+            )
 
-        # 4. Quality Attribute Reasoning: explicit mention of quality attributes or NFRs
-        if any(kw in raw_text for kw in ["availability", "latency", "throughput", "reliability", "scalability", "resilience"]) and (
-            "quality attribute" in raw_text or "nfr" in raw_text or "non-functional requirement" in raw_text or "sla" in raw_text
-        ):
-            return TaskType.QUALITY_ATTRIBUTE_REASONING
+        # 4. Quality Attribute Reasoning: Explicit NFR/quality attribute AND architectural reasoning
+        qa_matches = [p for p in QUALITY_ATTRIBUTES if re.search(p, raw_text)]
+        ind_matches = [p for p in QUALITY_REASONING_INDICATORS if re.search(p, raw_text)]
+        if qa_matches and ind_matches:
+            return ClassificationResult(
+                task_type=TaskType.QUALITY_ATTRIBUTE_REASONING,
+                confidence=0.86,
+                evidence=[
+                    f"Quality attribute: {', '.join(qa_matches[:2])}",
+                    f"Reasoning indicator: {ind_matches[0]}",
+                ],
+            )
 
-        # 5. Tradeoff Analysis: explicit positive vs negative consequences or options comparison
-        if (positive and negative) or (len(options) > 1 and ("tradeoff" in raw_text or "trade-off" in raw_text or "risk" in raw_text)):
-            return TaskType.TRADEOFF_ANALYSIS
+        # 5. Tradeoff Analysis: Multiple alternatives or pos/neg consequences AND tradeoff comparison evidence
+        tradeoff_matches = [p for p in TRADEOFF_INDICATORS if re.search(p, raw_text)]
+        if ((len(positive) > 0 and len(negative) > 0) or len(options) >= 2) and tradeoff_matches:
+            return ClassificationResult(
+                task_type=TaskType.TRADEOFF_ANALYSIS,
+                confidence=0.85,
+                evidence=[
+                    f"Alternatives/consequences count: options={len(options)}, pos={len(positive)}, neg={len(negative)}",
+                    f"Tradeoff evidence: {tradeoff_matches[0]}",
+                ],
+            )
 
-        # 6. Architecture Explanation: summary or motivation overview without explicit decision outcome
-        if (summary or motivation) and not parsed_record.get("decision_outcome") and not parsed_record.get("decision"):
-            return TaskType.ARCHITECTURE_EXPLANATION
+        # 6. ADR Reasoning: Architectural context + explicit decision outcome
+        is_decision_valid = bool(decision) and decision != "not explicitly stated" and len(decision.strip()) >= 15
+        is_context_valid = bool(context or summary or motivation) and len((context or summary or motivation).strip()) >= 20
+        if is_decision_valid and is_context_valid:
+            return ClassificationResult(
+                task_type=TaskType.ADR_REASONING,
+                confidence=0.80,
+                evidence=["Explicit architectural context and decision outcome present"],
+            )
 
-        # 7. ADR Reasoning: explicit decision outcome / decision section present
-        if parsed_record.get("decision_outcome") or parsed_record.get("decision") or parsed_record.get("proposal"):
-            return TaskType.ADR_REASONING
-
-        # 8. Default safe fallback without force-fitting
-        return TaskType.ARCHITECTURE_EXPLANATION
+        # 7. Architecture Explanation: Overview without explicit decision outcome
+        return ClassificationResult(
+            task_type=TaskType.ARCHITECTURE_EXPLANATION,
+            confidence=0.70,
+            evidence=["Architectural context present without explicit decision evidence"],
+        )
