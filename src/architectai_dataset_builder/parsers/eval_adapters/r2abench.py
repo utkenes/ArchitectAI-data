@@ -1,5 +1,5 @@
 """
-R2ABench Evaluation Adapter -> DiagramEvalSample (Held-Out Evaluation)
+R2ABench Evaluation Adapter -> DiagramEvalSample (Held-Out Evaluation) with Unified Discovery
 """
 
 from pathlib import Path
@@ -7,6 +7,7 @@ from pathlib import Path
 from architectai_dataset_builder.models.evaluation import DiagramEvalSample, EvalSourceMetadata
 from architectai_dataset_builder.utils.hashing import compute_sha256_file, compute_sha256_str
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
+from architectai_dataset_builder.utils.r2abench_discovery import discover_r2abench_projects
 
 
 class R2ABenchEvalAdapter:
@@ -16,27 +17,30 @@ class R2ABenchEvalAdapter:
 
     def parse_directory(self, raw_dir: Path) -> list[DiagramEvalSample]:
         samples: list[DiagramEvalSample] = []
+        discovered_projects = discover_r2abench_projects(raw_dir)
 
-        for req_file in sorted(raw_dir.glob("*_req.txt")) + sorted(raw_dir.glob("*.txt")):
-            if not req_file.is_file():
-                continue
-            project_id = req_file.stem.replace("_req", "")
-            if project_id not in self.held_out_project_ids:
+        for pid, proj_files in sorted(discovered_projects.items()):
+            if pid not in self.held_out_project_ids:
                 continue
 
-            arch_file = raw_dir / f"{project_id}_arch.puml"
-            if not arch_file.exists():
-                arch_file = raw_dir / f"{project_id}.puml"
+            req_file = proj_files.requirements_path
+            arch_file = proj_files.architecture_path
 
-            arch_text = arch_file.read_text(encoding="utf-8", errors="ignore") if arch_file.exists() else ""
+            arch_text = arch_file.read_text(encoding="utf-8", errors="ignore") if arch_file and arch_file.exists() else ""
             req_text = req_file.read_text(encoding="utf-8", errors="ignore")
             raw_hash = compute_sha256_file(req_file)
 
+            rel_path = (
+                req_file.relative_to(raw_dir).as_posix()
+                if req_file.is_relative_to(raw_dir)
+                else req_file.name
+            )
+
             sample_id = generate_stable_sample_id(
                 source_id=self.benchmark_id,
-                file_path=req_file.name,
-                record_id=project_id,
-                project_id=project_id,
+                file_path=rel_path,
+                record_id=pid,
+                project_id=pid,
                 prefix="eval_r2a_",
             )
             norm_hash = compute_sha256_str(f"{req_text}:{arch_text}")
