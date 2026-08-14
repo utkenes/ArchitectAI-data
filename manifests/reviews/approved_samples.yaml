@@ -1,9 +1,11 @@
 # Static manual approval manifest for Gold promotion in V1.
 # Format:
+# manual_review_completed: false
 # approved_samples:
 #   - sample_id: "arch_..."
 #     reviewer: "reviewer_name@domain.com"
 #     approved_at: "2026-08-12T12:00:00Z"
 #     notes: "Verified against original source ADR."
 
+manual_review_completed: false
 approved_samples: []
