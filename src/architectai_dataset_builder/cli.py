@@ -1,5 +1,5 @@
 """
-ArchitectAI Dataset Builder Command Line Interface
+ArchitectAI Dataset Builder Command Line Interface V1.2
 """
 
 from collections import Counter
@@ -14,6 +14,8 @@ from architectai_dataset_builder.exporters.corpus_manifest_exporter import Corpu
 from architectai_dataset_builder.exporters.gold_seed_exporter import GoldSeedExporter
 from architectai_dataset_builder.exporters.jsonl_exporter import JSONLExporter
 from architectai_dataset_builder.exporters.quality_sampler import QualitySampler
+from architectai_dataset_builder.exporters.training_balancer import TrainingBalancer
+from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.models.manifest import SourceManifest
 from architectai_dataset_builder.normalizers.canonical_normalizer import CanonicalNormalizer
 from architectai_dataset_builder.normalizers.relevance_filter import RelevanceFilter
@@ -26,6 +28,8 @@ from architectai_dataset_builder.parsers.training.k8s_keps import KubernetesKEPP
 from architectai_dataset_builder.parsers.training.madr import MADRParser
 from architectai_dataset_builder.parsers.training.opendatahub_adr import OpenDataHubADRParser
 from architectai_dataset_builder.parsers.training.r2abench import R2ABenchParser
+from architectai_dataset_builder.reports.corpus_coverage_reporter import CorpusCoverageReporter
+from architectai_dataset_builder.reports.eval_coverage_reporter import EvalCoverageReporter
 from architectai_dataset_builder.reports.readiness_reporter import ReadinessReporter
 from architectai_dataset_builder.reports.stats_generator import StatsGenerator
 from architectai_dataset_builder.sources.downloader import (
@@ -78,7 +82,7 @@ def verify_sources() -> None:
 
 
 @cli.command(name="build")
-@click.option("--build-id", default="build_v2_001", help="Unique build identifier")
+@click.option("--build-id", default="build_v1.2_001", help="Unique build identifier")
 @click.option("--mode", type=click.Choice(["production", "fixture"]), default="production", help="Build mode")
 def build_dataset(build_id: str, mode: str) -> None:
     """Execute end-to-end dataset build pipeline."""
@@ -135,9 +139,22 @@ def build_dataset(build_id: str, mode: str) -> None:
     raw_backstage_records = BackstageADRParser().parse_directory(cfg.data_dir / "raw" / "backstage_adrs")
     raw_k8s_records = KubernetesKEPParser().parse_directory(cfg.data_dir / "raw" / "k8s_keps")
 
+    raw_counts = {
+        "madr": len(raw_madr_records),
+        "opendatahub_adr": len(raw_odh_records),
+        "r2abench": len(raw_r2a_records),
+        "backstage_adrs": len(raw_backstage_records),
+        "k8s_keps": len(raw_k8s_records),
+    }
+
+    parsed_counts = dict(raw_counts)
+
     # 3. Normalize & Filter Relevance / License Gating
-    parsed_samples = []
+    parsed_samples: list[ArchitectAISample] = []
     quarantine_reasons: Counter[str] = Counter()
+    quarantine_breakdowns_by_source: dict[str, Counter[str]] = {
+        sid: Counter() for sid in raw_counts
+    }
     failed_parse_count = 0
 
     madr_manifest = registry.get_manifest("madr")
@@ -154,10 +171,12 @@ def build_dataset(build_id: str, mode: str) -> None:
 
     def process_records(records: list[dict[str, Any]], manifest: SourceManifest) -> None:
         nonlocal failed_parse_count
+        sid = manifest.source_id
         for r in records:
             if r.get("is_quarantined"):
                 reason = str(r.get("quarantine_reason", "unknown"))
                 quarantine_reasons[reason] += 1
+                quarantine_breakdowns_by_source[sid][reason] += 1
                 continue
 
             try:
@@ -165,6 +184,7 @@ def build_dataset(build_id: str, mode: str) -> None:
                     parsed_samples.append(normalizer.normalize(r, manifest))
                 else:
                     quarantine_reasons["low_relevance"] += 1
+                    quarantine_breakdowns_by_source[sid]["low_relevance"] += 1
             except (ValueError, KeyError, TypeError, AttributeError):
                 failed_parse_count += 1
 
@@ -180,12 +200,13 @@ def build_dataset(build_id: str, mode: str) -> None:
     )
 
     # 4. Identity Validation, License Gating, Schema Validation & Semantic Quality Gate
-    valid_samples = []
+    valid_samples: list[ArchitectAISample] = []
     for s in parsed_samples:
+        sid = s.source.source_id
         identity_validator.register_and_validate(
             sample_id=s.id,
             content_hash=s.source.normalized_sha256,
-            source_id=s.source.source_id,
+            source_id=sid,
             file_path=s.source.source_file_path,
             record_id=s.source.source_record_id,
             project_id=s.source.project_id,
@@ -193,17 +214,20 @@ def build_dataset(build_id: str, mode: str) -> None:
 
         if not license_gating.validate_sample(s):
             quarantine_reasons["unverified_license"] += 1
+            quarantine_breakdowns_by_source[sid]["unverified_license"] += 1
             continue
 
         is_valid, _ = schema_validator.validate(s)
         if not is_valid:
             quarantine_reasons["schema_validation_failed"] += 1
+            quarantine_breakdowns_by_source[sid]["schema_validation_failed"] += 1
             continue
 
         sem_res = semantic_validator.validate_sample(s)
         if not sem_res.passed:
             cat = sem_res.quarantine_category or "semantic_quality_failed"
             quarantine_reasons[cat] += 1
+            quarantine_breakdowns_by_source[sid][cat] += 1
             continue
 
         valid_samples.append(s)
@@ -247,10 +271,13 @@ def build_dataset(build_id: str, mode: str) -> None:
     train_export_paths = exporter.export_training_datasets(train_samples, val_samples, approved_ids)
     eval_export_paths = exporter.export_evaluation_datasets(eval_samples)
 
-    # 10. Gold Seed & Quality Review Exports
-    GoldSeedExporter(cfg.data_dir / "exports").export_review_candidates(unique_samples)
+    # 10. Gold Seed V2, Quality Sampler, Training Balancer
+    GoldSeedExporter(cfg.data_dir / "exports").export_review_candidates(unique_samples, target_candidate_count=50)
     QualitySampler(cfg.data_dir / "exports").export_quality_samples(unique_samples)
-    click.echo("[OK] Exported gold_review_candidates.jsonl and quality_review_samples.jsonl")
+    balancer_res = TrainingBalancer(cfg.data_dir / "exports").generate_profiles(train_samples)
+    click.echo("[OK] Exported gold_review_candidates.jsonl, quality_review_samples.jsonl, and train_sft_balanced.jsonl")
+
+    cons_profile_conc = balancer_res.get("profiles", {}).get("balanced_conservative", {}).get("source_concentration_ratio")
 
     # 11. Final SFT Export Validation
     export_validator = SFTExportValidator()
@@ -263,7 +290,7 @@ def build_dataset(build_id: str, mode: str) -> None:
 
     all_export_paths = {**train_export_paths, **eval_export_paths}
 
-    # 12. Reports
+    # 12. Reports (Stats, Eval Coverage, Corpus Coverage, Readiness, Manifests)
     stats_gen = StatsGenerator()
     stats_gen.generate_stats(
         train_samples,
@@ -276,6 +303,23 @@ def build_dataset(build_id: str, mode: str) -> None:
         actual_source_mode,
         build_status,
         cfg.data_dir / "exports" / "dataset_stats.json",
+    )
+
+    EvalCoverageReporter().generate_report(
+        eval_samples=eval_samples,
+        raw_data_dir=cfg.data_dir / "raw",
+        expected_r2a_heldout_pids=splitter.r2abench_splits["held_out"],
+        output_file=cfg.data_dir / "exports" / "eval_coverage_report.json",
+    )
+
+    CorpusCoverageReporter().generate_report(
+        raw_counts=raw_counts,
+        parsed_counts=parsed_counts,
+        quarantine_breakdowns=quarantine_breakdowns_by_source,
+        valid_samples=valid_samples,
+        train_samples=train_samples,
+        val_samples=val_samples,
+        output_file=cfg.data_dir / "exports" / "corpus_coverage_report.json",
     )
 
     eval_benchmark_counts = {
@@ -300,9 +344,10 @@ def build_dataset(build_id: str, mode: str) -> None:
         manual_review_completed=manual_review_completed,
         export_validation_result=export_val_result,
         readiness_policy=readiness_policy,
+        training_profile_concentration=cons_profile_conc,
         output_file=cfg.data_dir / "exports" / "training_readiness_report.json",
     )
-    click.echo("[OK] Generated training_readiness_report.json")
+    click.echo("[OK] Generated training_readiness_report.json, eval_coverage_report.json, and corpus_coverage_report.json")
 
     CorpusManifestExporter(cfg.data_dir / "exports").export_corpus_manifest(
         build_id=build_id,
