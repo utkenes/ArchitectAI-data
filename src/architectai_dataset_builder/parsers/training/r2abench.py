@@ -63,7 +63,7 @@ class R2ABenchParser(BaseParser):
 
             sample_id = generate_stable_sample_id(
                 source_id=self.source_id,
-                file_path=req_file.name,
+                file_path=req_file.relative_to(raw_dir).as_posix(),
                 record_id=project_id,
                 project_id=project_id,
             )

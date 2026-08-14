@@ -44,19 +44,20 @@ class MADRParser(BaseParser):
                 )
                 continue
 
-            record = self._parse_file(file_path)
+            record = self._parse_file(file_path, raw_dir)
             if record:
                 records.append(record)
         return records
 
-    def _parse_file(self, file_path: Path) -> dict[str, Any]:
+    def _parse_file(self, file_path: Path, raw_dir: Path) -> dict[str, Any]:
         text = file_path.read_text(encoding="utf-8", errors="ignore")
         raw_hash = compute_sha256_file(file_path)
 
         record_id = file_path.stem
+        rel_path = file_path.relative_to(raw_dir).as_posix()
         sample_id = generate_stable_sample_id(
             source_id=self.source_id,
-            file_path=file_path.name,
+            file_path=rel_path,
             record_id=record_id,
         )
 

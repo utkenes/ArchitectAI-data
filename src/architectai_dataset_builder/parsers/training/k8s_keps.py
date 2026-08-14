@@ -60,7 +60,7 @@ class KubernetesKEPParser(BaseParser):
         record_id = file_path.parent.name if file_path.name.lower() == "readme.md" else file_path.stem
         sample_id = generate_stable_sample_id(
             source_id=self.source_id,
-            file_path=str(file_path.relative_to(raw_dir)),
+            file_path=file_path.relative_to(raw_dir).as_posix(),
             record_id=record_id,
             project_id=sig_id,
         )
