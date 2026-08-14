@@ -45,3 +45,9 @@ training_readiness:
   max_semantic_failures_exported: 0
   require_manual_review: true
   max_single_source_ratio: 0.80
+  minimum_task_coverage:
+    adr_reasoning: 10
+    tradeoff_analysis: 10
+    technology_selection: 10
+    scaling_reasoning: 10
+    quality_attribute_reasoning: 10

@@ -1,5 +1,5 @@
 """
-MADR (Markdown Architectural Decision Records) Parser with Section Synonym Mapping
+MADR (Markdown Architectural Decision Records) Parser with Section Synonym Mapping & Tradeoff Extraction
 """
 
 import re
@@ -11,6 +11,7 @@ from architectai_dataset_builder.utils.hashing import compute_sha256_file
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
 from architectai_dataset_builder.utils.markdown import (
     ALTERNATIVE_SYNONYMS,
+    CONSEQUENCE_SYNONYMS,
     CONTEXT_SYNONYMS,
     DECISION_SYNONYMS,
     extract_markdown_section,
@@ -65,7 +66,6 @@ class MADRParser(BaseParser):
             record_id=record_id,
         )
 
-        # 1. Quarantine unresolved template placeholders post-sanitization
         if has_template_placeholders(sanitized_text):
             return {
                 "sample_id": sample_id,
@@ -85,10 +85,10 @@ class MADRParser(BaseParser):
         drivers_raw = extract_markdown_section(sanitized_text, ["decision drivers", "drivers"])
         options_raw = extract_markdown_section(sanitized_text, ALTERNATIVE_SYNONYMS)
         outcome_raw = extract_markdown_section(sanitized_text, DECISION_SYNONYMS)
+        consequences_raw = extract_markdown_section(sanitized_text, CONSEQUENCE_SYNONYMS)
         pos_consequences_raw = extract_markdown_section(sanitized_text, ["positive consequences", "pros"])
         neg_consequences_raw = extract_markdown_section(sanitized_text, ["negative consequences", "cons"])
 
-        # 2. Strict grounding: Require genuine decision outcome and context section
         is_decision_valid = bool(outcome_raw) and outcome_raw.lower() != "not explicitly stated" and len(outcome_raw.strip()) >= 15
         is_context_valid = bool(context) and len(context.strip()) >= 30
 
@@ -106,6 +106,7 @@ class MADRParser(BaseParser):
 
         drivers = extract_structured_items(drivers_raw)
         options = extract_structured_items(options_raw)
+        consequences = extract_structured_items(consequences_raw)
         pos_consequences = extract_structured_items(pos_consequences_raw)
         neg_consequences = extract_structured_items(neg_consequences_raw)
 
@@ -121,8 +122,10 @@ class MADRParser(BaseParser):
             "options": options,
             "decision_outcome": outcome_raw,
             "decision": outcome_raw,
+            "consequences": consequences,
             "positive_consequences": pos_consequences,
             "negative_consequences": neg_consequences,
+            "tradeoffs": consequences,
             "raw_text": sanitized_text,
             "is_quarantined": False,
         }

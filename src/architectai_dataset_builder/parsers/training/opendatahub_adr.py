@@ -1,5 +1,5 @@
 """
-OpenDataHub Architecture Decision Record (ADR) Parser with Section Synonym Mapping
+OpenDataHub Architecture Decision Record (ADR) Parser with Section Synonym Mapping & Tradeoff Extraction
 """
 
 import re
@@ -11,6 +11,7 @@ from architectai_dataset_builder.utils.hashing import compute_sha256_file
 from architectai_dataset_builder.utils.identity import generate_stable_sample_id
 from architectai_dataset_builder.utils.markdown import (
     ALTERNATIVE_SYNONYMS,
+    CONSEQUENCE_SYNONYMS,
     CONTEXT_SYNONYMS,
     DECISION_SYNONYMS,
     extract_markdown_section,
@@ -65,7 +66,6 @@ class OpenDataHubADRParser(BaseParser):
             record_id=record_id,
         )
 
-        # 1. Quarantine unresolved template placeholders post-sanitization
         if has_template_placeholders(sanitized_text):
             return {
                 "sample_id": sample_id,
@@ -85,9 +85,9 @@ class OpenDataHubADRParser(BaseParser):
         context = extract_markdown_section(sanitized_text, CONTEXT_SYNONYMS)
         decision = extract_markdown_section(sanitized_text, DECISION_SYNONYMS)
         alternatives_raw = extract_markdown_section(sanitized_text, ALTERNATIVE_SYNONYMS)
+        consequences_raw = extract_markdown_section(sanitized_text, CONSEQUENCE_SYNONYMS)
         rationale = extract_markdown_section(sanitized_text, ["rationale", "consequences"])
 
-        # 2. Strict grounding: Require genuine decision and context section
         is_decision_valid = bool(decision) and decision.lower() != "not explicitly stated" and len(decision.strip()) >= 15
         is_context_valid = bool(context) and len(context.strip()) >= 30
 
@@ -104,6 +104,7 @@ class OpenDataHubADRParser(BaseParser):
             }
 
         alternatives = extract_structured_items(alternatives_raw)
+        consequences = extract_structured_items(consequences_raw)
 
         return {
             "sample_id": sample_id,
@@ -118,6 +119,8 @@ class OpenDataHubADRParser(BaseParser):
             "decision": decision,
             "decision_outcome": decision,
             "rationale": rationale or decision,
+            "consequences": consequences,
+            "tradeoffs": consequences,
             "raw_text": sanitized_text,
             "is_quarantined": False,
         }

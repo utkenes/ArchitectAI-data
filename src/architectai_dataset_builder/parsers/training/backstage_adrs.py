@@ -118,6 +118,7 @@ class BackstageADRParser(BaseParser):
             "decision": decision,
             "decision_outcome": decision,
             "consequences": consequences,
+            "tradeoffs": consequences,
             "alternatives": alternatives,
             "raw_text": sanitized_text,
             "is_quarantined": False,

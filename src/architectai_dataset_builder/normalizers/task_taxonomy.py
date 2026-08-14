@@ -202,15 +202,20 @@ class TaskTaxonomyClassifier:
                 ],
             )
 
-        # 5. Tradeoff Analysis: Multiple alternatives or pos/neg consequences AND tradeoff comparison evidence
+        # 5. Tradeoff Analysis: Explicit tradeoffs/consequences evidence or tradeoff comparison indicators
+        tradeoffs = parsed_record.get("tradeoffs", []) or parsed_record.get("consequences", [])
         tradeoff_matches = [p for p in TRADEOFF_INDICATORS if re.search(p, raw_text)]
-        if ((len(positive) > 0 and len(negative) > 0) or len(options) >= 2) and tradeoff_matches:
+
+        has_explicit_tradeoff_section = len(tradeoffs) > 0 or (len(positive) > 0 and len(negative) > 0)
+        has_tradeoff_indicator = bool(tradeoff_matches) and (len(options) >= 1 or len(tradeoffs) >= 1)
+
+        if has_explicit_tradeoff_section or has_tradeoff_indicator:
             return ClassificationResult(
                 task_type=TaskType.TRADEOFF_ANALYSIS,
                 confidence=0.85,
                 evidence=[
-                    f"Alternatives/consequences count: options={len(options)}, pos={len(positive)}, neg={len(negative)}",
-                    f"Tradeoff evidence: {tradeoff_matches[0]}",
+                    f"Tradeoff/consequence items count: {len(tradeoffs)}, pos={len(positive)}, neg={len(negative)}",
+                    f"Tradeoff indicator: {tradeoff_matches[0] if tradeoff_matches else 'explicit section'}",
                 ],
             )
 

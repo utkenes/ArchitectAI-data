@@ -101,7 +101,7 @@ class CanonicalNormalizer:
             tradeoffs.append(
                 EvidenceItem(value=f"Disadvantage: {neg}", evidence_type=EvidenceType.EXPLICIT)
             )
-        for t in parsed_record.get("tradeoffs", []):
+        for t in parsed_record.get("tradeoffs", []) or parsed_record.get("consequences", []) or parsed_record.get("risks", []):
             tradeoffs.append(
                 EvidenceItem(value=f"Risk/Trade-off: {t}", evidence_type=EvidenceType.EXPLICIT)
             )
