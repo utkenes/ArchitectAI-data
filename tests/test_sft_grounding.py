@@ -1,5 +1,11 @@
 from architectai_dataset_builder.exporters.sft_formatter import SFTFormatter
-from architectai_dataset_builder.models.canonical import ArchitectAISample, SourceMetadata, TaskType
+from architectai_dataset_builder.models.canonical import (
+    Alternative,
+    ArchitectAISample,
+    SourceMetadata,
+    TaskType,
+)
+from architectai_dataset_builder.models.evidence import EvidenceItem, EvidenceType
 from architectai_dataset_builder.utils.markdown import (
     has_template_placeholders,
     is_boilerplate_filename,
@@ -38,6 +44,57 @@ def test_sft_formatter_grounding():
     assert "Decision: Use Event-Driven Architecture" in formatted["messages"][2]["content"]
 
 
+def test_sft_formatter_task_aligned_shapes():
+    formatter = SFTFormatter()
+
+    # 1. Technology Selection shape
+    tech_sample = ArchitectAISample(
+        id="arch_tech01",
+        source=SourceMetadata(
+            source_id="madr",
+            source_name="MADR",
+            source_file_path="0002.md",
+            source_record_id="rec2",
+            license_id="MIT",
+            raw_sha256="raw",
+            normalized_sha256="norm",
+        ),
+        scenario="Evaluate database for high-volume order store.",
+        task_type=TaskType.TECHNOLOGY_SELECTION,
+        alternatives=[Alternative(option="MySQL"), Alternative(option="PostgreSQL")],
+        decisions=[EvidenceItem(value="Use PostgreSQL with Partitioning", evidence_type=EvidenceType.EXPLICIT)],
+    )
+    formatted = formatter.format_sample(tech_sample)
+    assert formatted is not None
+    resp = formatted["messages"][2]["content"]
+    assert "Selected Approach:" in resp
+    assert "Compared Against:" in resp
+    assert "PostgreSQL" in resp
+
+    # 2. Scaling Reasoning shape
+    scaling_sample = ArchitectAISample(
+        id="arch_scale01",
+        source=SourceMetadata(
+            source_id="k8s_keps",
+            source_name="KEPs",
+            source_file_path="kep.md",
+            source_record_id="rec3",
+            license_id="Apache-2.0",
+            raw_sha256="raw",
+            normalized_sha256="norm",
+        ),
+        scenario="High throughput workload growth requires horizontal capacity.",
+        task_type=TaskType.SCALING_REASONING,
+        architecture_drivers=[EvidenceItem(value="Throughput: 100k rps", evidence_type=EvidenceType.EXPLICIT)],
+        decisions=[EvidenceItem(value="Deploy Horizontal Pod Autoscaler", evidence_type=EvidenceType.EXPLICIT)],
+    )
+    formatted_scaling = formatter.format_sample(scaling_sample)
+    assert formatted_scaling is not None
+    resp_scaling = formatted_scaling["messages"][2]["content"]
+    assert "Scaling Driver:" in resp_scaling
+    assert "Architectural Response:" in resp_scaling
+
+
 def test_not_explicitly_stated_rejection():
     formatter = SFTFormatter()
 
@@ -64,7 +121,7 @@ def test_not_explicitly_stated_rejection():
 
 
 def test_csi_volume_topology_lifecycle_status_rejection():
-    """Regression Test: Reject SFT samples where decision/proposal is status/graduation metadata only."""
+    """Reject SFT samples where decision/proposal is status/graduation metadata only."""
     formatter = SFTFormatter()
 
     csi_topology_sample = ArchitectAISample(
