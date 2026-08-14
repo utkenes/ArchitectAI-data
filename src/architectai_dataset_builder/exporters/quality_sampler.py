@@ -8,13 +8,19 @@ from typing import Any
 from architectai_dataset_builder.exporters.sft_formatter import SFTFormatter
 from architectai_dataset_builder.models.canonical import ArchitectAISample
 from architectai_dataset_builder.utils.io import write_jsonl
+from architectai_dataset_builder.validators.semantic_quality import SemanticQualityValidator
 
 
 class QualitySampler:
+    """
+    Exports quality review samples with calculated semantic validation checks and failure reasons.
+    """
+
     def __init__(self, export_dir: Path) -> None:
         self.export_dir = Path(export_dir)
         self.export_dir.mkdir(parents=True, exist_ok=True)
         self.sft_formatter = SFTFormatter()
+        self.semantic_validator = SemanticQualityValidator()
 
     def export_quality_samples(
         self, samples: list[ArchitectAISample], samples_per_pair: int = 1
@@ -30,6 +36,8 @@ class QualitySampler:
         for pair_key, pair_samples in sorted(by_pair.items()):
             for s in pair_samples[:samples_per_pair]:
                 sft_formatted = self.sft_formatter.format_sample(s)
+                val_result = self.semantic_validator.validate_sample(s, sft_formatted)
+
                 quality_entries.append(
                     {
                         "source_task_pair": pair_key,
@@ -39,9 +47,10 @@ class QualitySampler:
                         "canonical_sample": s.model_dump(),
                         "sft_formatted": sft_formatted,
                         "quality_checkpoint": {
-                            "context_preserved": True,
-                            "task_classification_grounded": True,
-                            "no_hallucinated_recommendation": True,
+                            "passed": val_result.passed,
+                            "checks": val_result.checks,
+                            "reasons": val_result.reasons,
+                            "quarantine_category": val_result.quarantine_category,
                         },
                     }
                 )
