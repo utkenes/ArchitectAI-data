@@ -29,7 +29,7 @@ class DatasetStatsReport(BaseModel):
     sample_count_by_task_type: dict[str, int]
     sample_count_by_quality_class: dict[str, int]
     sample_count_by_license: dict[str, int]
-    duplicate_count: int
+    exact_duplicate_count: int
     near_duplicate_count: int
     quarantine_count: int
     quarantine_reasons: dict[str, int] = Field(default_factory=dict)

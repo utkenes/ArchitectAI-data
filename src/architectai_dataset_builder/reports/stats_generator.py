@@ -46,7 +46,7 @@ class StatsGenerator:
             sample_count_by_task_type=dict(task_counts),
             sample_count_by_quality_class=dict(quality_counts),
             sample_count_by_license=dict(license_counts),
-            duplicate_count=exact_dups,
+            exact_duplicate_count=exact_dups,
             near_duplicate_count=near_dups,
             quarantine_count=quarantine_count,
             quarantine_reasons=quarantine_reasons,

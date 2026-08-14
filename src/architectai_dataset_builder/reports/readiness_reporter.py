@@ -1,5 +1,5 @@
 """
-Automated Training Readiness Reporter V2.1 for ArchitectAI Model Fine-Tuning Gate
+Automated Training Readiness Reporter V2.2 for ArchitectAI Model Fine-Tuning Gate
 """
 
 from pathlib import Path
@@ -12,7 +12,8 @@ from architectai_dataset_builder.validators.sft_export_validator import ExportVa
 
 class ReadinessReporter:
     """
-    Computes measurable training readiness criteria based on actual dataset metrics and export validation.
+    Computes measurable training readiness criteria based on actual dataset metrics, export validation,
+    and task coverage.
     Statuses: BUILD_INVALID, BUILD_VALID_REVIEW_REQUIRED, TRAINING_READY
     """
 
@@ -30,6 +31,7 @@ class ReadinessReporter:
         manual_review_completed: bool = False,
         export_validation_result: ExportValidationResult | dict[str, Any] | None = None,
         readiness_policy: dict[str, Any] | None = None,
+        training_profile_concentration: float | None = None,
         output_file: Path | None = None,
     ) -> dict[str, Any]:
         policy = readiness_policy or {}
@@ -37,6 +39,7 @@ class ReadinessReporter:
         min_eval = policy.get("min_eval_samples", 30)
         max_source_ratio = policy.get("max_single_source_ratio", 0.80)
         require_manual_review = policy.get("require_manual_review", True)
+        min_task_coverage = policy.get("minimum_task_coverage", {})
 
         max_duplicate_ids = policy.get("max_duplicate_ids", 0)
         max_conflicting_ids = policy.get("max_conflicting_duplicate_ids", 0)
@@ -88,9 +91,9 @@ class ReadinessReporter:
         val_groups = {s.source.group_id for s in val_samples if s.source.group_id}
         group_overlap = len(train_groups.intersection(val_groups)) + group_overlap_count
 
-        # Source Concentration Ratio
+        # Source Concentration Ratios
         max_source_count = max(source_dist.values()) if source_dist else 0
-        source_concentration_ratio = round(max_source_count / max(total_silver, 1), 4)
+        corpus_source_concentration = round(max_source_count / max(total_silver, 1), 4)
 
         total_processed = total_silver + quarantine_count + failed_parse_count
         quarantine_rate = round(quarantine_count / max(total_processed, 1), 4)
@@ -131,7 +134,16 @@ class ReadinessReporter:
         if total_silver == 0:
             blocking_reasons.append("No valid silver training samples produced.")
 
-        # 2. Readiness Status Evaluation
+        # 2. Priority Task Coverage Gate
+        if min_task_coverage:
+            for task_name, min_cnt in min_task_coverage.items():
+                actual_cnt = task_dist.get(task_name, 0)
+                if actual_cnt < min_cnt:
+                    warnings.append(
+                        f"Priority task '{task_name}' count is below minimum threshold ({actual_cnt} < {min_cnt})."
+                    )
+
+        # 3. Readiness Status Evaluation
         if blocking_reasons:
             status = "BUILD_INVALID"
         else:
@@ -145,9 +157,9 @@ class ReadinessReporter:
                     f"Evaluation coverage is below recommended threshold ({total_eval_samples} < {min_eval})."
                 )
 
-            if source_concentration_ratio > max_source_ratio:
+            if corpus_source_concentration > max_source_ratio:
                 warnings.append(
-                    f"High source concentration: single source represents {source_concentration_ratio * 100:.1f}% (> {max_source_ratio * 100:.1f}%)."
+                    f"High corpus source concentration: single source represents {corpus_source_concentration * 100:.1f}% (> {max_source_ratio * 100:.1f}%)."
                 )
 
             if parse_failure_rate > 0.05:
@@ -174,11 +186,15 @@ class ReadinessReporter:
             "manual_review_completed": manual_review_completed,
             "evaluation_counts": eval_summary,
             "source_distribution": source_dist,
-            "source_concentration_ratio": source_concentration_ratio,
+            "corpus_source_concentration": corpus_source_concentration,
+            "training_profile_source_concentration": training_profile_concentration or corpus_source_concentration,
+            "source_concentration_ratio": corpus_source_concentration,
             "task_distribution": task_dist,
             "license_coverage": license_dist,
             "quarantine_rate": quarantine_rate,
             "parse_failure_rate": parse_failure_rate,
+            "exact_duplicate_count": exact_dups,
+            "near_duplicate_count": near_dups,
             "exact_duplicate_rate": exact_dup_rate,
             "near_duplicate_rate": near_dup_rate,
             "duplicate_sample_ids": duplicate_ids,
