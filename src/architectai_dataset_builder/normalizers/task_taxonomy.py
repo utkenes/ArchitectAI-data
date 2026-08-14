@@ -6,8 +6,8 @@ the evidence contract for that task. If evidence is missing or ambiguous,
 the classifier falls back conservatively to adr_reasoning or architecture_explanation.
 """
 
-from dataclasses import dataclass, field
 import re
+from dataclasses import dataclass, field
 from typing import Any
 
 from architectai_dataset_builder.models.canonical import TaskType

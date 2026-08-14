@@ -88,11 +88,10 @@ class SemanticQualityValidator:
                 quarantine_category = quarantine_category or "missing_decision"
 
         # 5. Alternatives Valid (where required)
-        if sample.task_type in [TaskType.TRADEOFF_ANALYSIS, TaskType.TECHNOLOGY_SELECTION]:
-            if len(sample.alternatives) < 1 and len(sample.tradeoffs) < 1:
-                checks["alternatives_valid"] = False
-                reasons.append(f"Task '{sample.task_type.value}' requires explicit alternatives or tradeoffs")
-                quarantine_category = quarantine_category or "invalid_alternatives"
+        if sample.task_type in [TaskType.TRADEOFF_ANALYSIS, TaskType.TECHNOLOGY_SELECTION] and len(sample.alternatives) < 1 and len(sample.tradeoffs) < 1:
+            checks["alternatives_valid"] = False
+            reasons.append(f"Task '{sample.task_type.value}' requires explicit alternatives or tradeoffs")
+            quarantine_category = quarantine_category or "invalid_alternatives"
 
         # 6. Task Semantics Valid
         record_dict = {
