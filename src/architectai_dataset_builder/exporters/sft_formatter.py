@@ -111,8 +111,6 @@ class SFTFormatter:
             sections = []
             if drivers:
                 sections.append("Scaling Driver:\n" + "\n".join([f"- {d}" for d in drivers[:3]]))
-            else:
-                sections.append("Scaling Driver:\nWorkload growth, high throughput, or capacity requirement.")
             if dec_clean:
                 sections.append(f"Architectural Response:\n{dec_clean}")
             if facts:
@@ -189,6 +187,10 @@ class SFTFormatter:
             or is_lifecycle_status_only(response_clean)
             or has_template_placeholders(response_clean)
             or "<!--" in response_clean
+            or "-->" in response_clean
+            or "${" in response_clean
+            or "{{" in response_clean
+            or "}}" in response_clean
         ):
             return None
 
