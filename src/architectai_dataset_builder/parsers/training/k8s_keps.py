@@ -15,9 +15,11 @@ from architectai_dataset_builder.utils.markdown import (
     CONTEXT_SYNONYMS,
     DECISION_SYNONYMS,
     extract_markdown_section,
+    extract_structured_items,
     has_template_placeholders,
     is_boilerplate_filename,
     is_lifecycle_status_only,
+    sanitize_markdown,
 )
 
 
@@ -55,6 +57,9 @@ class KubernetesKEPParser(BaseParser):
         text = file_path.read_text(encoding="utf-8", errors="ignore")
         raw_hash = compute_sha256_file(file_path)
 
+        # 1. Sanitize markdown (remove HTML comments & template guidelines)
+        sanitized_text = sanitize_markdown(text)
+
         rel_parts = file_path.relative_to(raw_dir).parts
         sig_id = rel_parts[1] if len(rel_parts) > 2 else "sig-architecture"
         record_id = file_path.parent.name if file_path.name.lower() == "readme.md" else file_path.stem
@@ -65,8 +70,8 @@ class KubernetesKEPParser(BaseParser):
             project_id=sig_id,
         )
 
-        # 1. Quarantine unresolved template placeholders
-        if has_template_placeholders(text):
+        # 2. Quarantine unresolved template placeholders post-sanitization
+        if has_template_placeholders(sanitized_text):
             return {
                 "sample_id": sample_id,
                 "source_id": self.source_id,
@@ -76,24 +81,24 @@ class KubernetesKEPParser(BaseParser):
                 "raw_sha256": raw_hash,
                 "is_quarantined": True,
                 "quarantine_reason": "unresolved_template_placeholder",
-                "raw_text": text,
+                "raw_text": sanitized_text,
             }
 
-        title_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
+        title_match = re.search(r"^#\s+(.+)$", sanitized_text, re.MULTILINE)
         title = title_match.group(1).strip() if title_match else record_id
 
-        status_match = re.search(r"^status:\s*(.+)$", text, re.IGNORECASE | re.MULTILINE)
+        status_match = re.search(r"^status:\s*(.+)$", sanitized_text, re.IGNORECASE | re.MULTILINE)
         if not status_match:
-            status_match = re.search(r"## Status\s*\n+([^\n#]+)", text, re.IGNORECASE)
+            status_match = re.search(r"## Status\s*\n+([^\n#]+)", sanitized_text, re.IGNORECASE)
         kep_status = status_match.group(1).strip().lower() if status_match else "provisional"
 
-        # 2. Extract sections using robust synonym mapping
-        context_text = extract_markdown_section(text, CONTEXT_SYNONYMS)
-        decision_text = extract_markdown_section(text, DECISION_SYNONYMS)
-        consequences_text = extract_markdown_section(text, CONSEQUENCE_SYNONYMS)
-        alternatives_text = extract_markdown_section(text, ALTERNATIVE_SYNONYMS)
+        # 3. Extract sections using robust synonym mapping
+        context_text = extract_markdown_section(sanitized_text, CONTEXT_SYNONYMS)
+        decision_text = extract_markdown_section(sanitized_text, DECISION_SYNONYMS)
+        consequences_text = extract_markdown_section(sanitized_text, CONSEQUENCE_SYNONYMS)
+        alternatives_text = extract_markdown_section(sanitized_text, ALTERNATIVE_SYNONYMS)
 
-        # 3. Validate context and decision (reject lifecycle/status metadata only)
+        # 4. Validate context and decision
         is_decision_valid = (
             bool(decision_text)
             and len(decision_text.strip()) >= 15
@@ -111,8 +116,11 @@ class KubernetesKEPParser(BaseParser):
                 "raw_sha256": raw_hash,
                 "is_quarantined": True,
                 "quarantine_reason": "missing_decision_section",
-                "raw_text": text,
+                "raw_text": sanitized_text,
             }
+
+        alternatives = extract_structured_items(alternatives_text)
+        tradeoffs = extract_structured_items(consequences_text)
 
         return {
             "sample_id": sample_id,
@@ -128,8 +136,8 @@ class KubernetesKEPParser(BaseParser):
             "proposal": decision_text,
             "decision": decision_text,
             "decision_outcome": decision_text,
-            "alternatives": [a.strip("- *") for a in alternatives_text.split("\n") if a.strip("- *")],
-            "tradeoffs": [r.strip("- *") for r in consequences_text.split("\n") if r.strip("- *")],
-            "raw_text": text,
+            "alternatives": alternatives,
+            "tradeoffs": tradeoffs,
+            "raw_text": sanitized_text,
             "is_quarantined": False,
         }

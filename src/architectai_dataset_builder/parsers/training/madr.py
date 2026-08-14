@@ -14,8 +14,10 @@ from architectai_dataset_builder.utils.markdown import (
     CONTEXT_SYNONYMS,
     DECISION_SYNONYMS,
     extract_markdown_section,
+    extract_structured_items,
     has_template_placeholders,
     is_boilerplate_filename,
+    sanitize_markdown,
 )
 
 
@@ -53,6 +55,8 @@ class MADRParser(BaseParser):
         text = file_path.read_text(encoding="utf-8", errors="ignore")
         raw_hash = compute_sha256_file(file_path)
 
+        sanitized_text = sanitize_markdown(text)
+
         record_id = file_path.stem
         rel_path = file_path.relative_to(raw_dir).as_posix()
         sample_id = generate_stable_sample_id(
@@ -61,8 +65,8 @@ class MADRParser(BaseParser):
             record_id=record_id,
         )
 
-        # 1. Quarantine unresolved template placeholders
-        if has_template_placeholders(text):
+        # 1. Quarantine unresolved template placeholders post-sanitization
+        if has_template_placeholders(sanitized_text):
             return {
                 "sample_id": sample_id,
                 "source_id": self.source_id,
@@ -71,18 +75,18 @@ class MADRParser(BaseParser):
                 "raw_sha256": raw_hash,
                 "is_quarantined": True,
                 "quarantine_reason": "unresolved_template_placeholder",
-                "raw_text": text,
+                "raw_text": sanitized_text,
             }
 
-        title_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
+        title_match = re.search(r"^#\s+(.+)$", sanitized_text, re.MULTILINE)
         title = title_match.group(1).strip() if title_match else file_path.stem
 
-        context = extract_markdown_section(text, CONTEXT_SYNONYMS)
-        drivers_raw = extract_markdown_section(text, ["decision drivers", "drivers"])
-        options_raw = extract_markdown_section(text, ALTERNATIVE_SYNONYMS)
-        outcome_raw = extract_markdown_section(text, DECISION_SYNONYMS)
-        pos_consequences = extract_markdown_section(text, ["positive consequences", "pros"])
-        neg_consequences = extract_markdown_section(text, ["negative consequences", "cons"])
+        context = extract_markdown_section(sanitized_text, CONTEXT_SYNONYMS)
+        drivers_raw = extract_markdown_section(sanitized_text, ["decision drivers", "drivers"])
+        options_raw = extract_markdown_section(sanitized_text, ALTERNATIVE_SYNONYMS)
+        outcome_raw = extract_markdown_section(sanitized_text, DECISION_SYNONYMS)
+        pos_consequences_raw = extract_markdown_section(sanitized_text, ["positive consequences", "pros"])
+        neg_consequences_raw = extract_markdown_section(sanitized_text, ["negative consequences", "cons"])
 
         # 2. Strict grounding: Require genuine decision outcome and context section
         is_decision_valid = bool(outcome_raw) and outcome_raw.lower() != "not explicitly stated" and len(outcome_raw.strip()) >= 15
@@ -97,8 +101,13 @@ class MADRParser(BaseParser):
                 "raw_sha256": raw_hash,
                 "is_quarantined": True,
                 "quarantine_reason": "missing_decision_section",
-                "raw_text": text,
+                "raw_text": sanitized_text,
             }
+
+        drivers = extract_structured_items(drivers_raw)
+        options = extract_structured_items(options_raw)
+        pos_consequences = extract_structured_items(pos_consequences_raw)
+        neg_consequences = extract_structured_items(neg_consequences_raw)
 
         return {
             "sample_id": sample_id,
@@ -108,12 +117,12 @@ class MADRParser(BaseParser):
             "raw_sha256": raw_hash,
             "title": title,
             "context": context,
-            "drivers": [d.strip("- *") for d in drivers_raw.split("\n") if d.strip("- *")],
-            "options": [o.strip("- *") for o in options_raw.split("\n") if o.strip("- *")],
+            "drivers": drivers,
+            "options": options,
             "decision_outcome": outcome_raw,
             "decision": outcome_raw,
-            "positive_consequences": [p.strip("- *") for p in pos_consequences.split("\n") if p.strip("- *")],
-            "negative_consequences": [n.strip("- *") for n in neg_consequences.split("\n") if n.strip("- *")],
-            "raw_text": text,
+            "positive_consequences": pos_consequences,
+            "negative_consequences": neg_consequences,
+            "raw_text": sanitized_text,
             "is_quarantined": False,
         }

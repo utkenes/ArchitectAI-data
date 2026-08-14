@@ -1,5 +1,5 @@
 """
-Markdown Parsing, Section Synonym Extraction, and Template Placeholder Detection Utilities
+Markdown Parsing, Section Synonym Extraction, Template Placeholder Detection, and Sanitization Utilities
 """
 
 import re
@@ -91,6 +91,26 @@ LIFECYCLE_STATUS_PATTERNS = [
 ]
 
 
+def sanitize_markdown(text: str) -> str:
+    """
+    Sanitizes raw markdown before section extraction:
+    - Removes HTML comments (e.g. <!-- ... -->)
+    - Removes template instruction comment blocks
+    - Normalizes excessive whitespace while preserving paragraph breaks and code blocks
+    - Preserves real prose and code blocks
+    """
+    if not text:
+        return ""
+
+    # 1. Remove HTML comments (single-line and multi-line)
+    clean_text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+
+    # 2. Normalize 3+ consecutive newlines to 2 newlines
+    clean_text = re.sub(r"\n{3,}", "\n\n", clean_text)
+
+    return clean_text.strip()
+
+
 def has_template_placeholders(text: str) -> bool:
     """Check if text contains unresolved template placeholders like ${...}, {{...}}, {title of option...}."""
     if not text:
@@ -173,27 +193,92 @@ def is_boilerplate_filename(file_path: Path | str, source_id: str = "") -> bool:
 
 def extract_markdown_section(text: str, synonyms: list[str]) -> str:
     """
-    Extract full markdown section content matching any heading synonym up to the next level-1 or level-2 heading.
+    Extract full markdown section content matching any heading synonym up to the next heading whose level <= N (where N is the matched heading level).
+    If a section starts at heading level N, extraction stops at the next heading whose level is <= N.
     """
     for synonym in synonyms:
-        # Exact heading match, e.g. '## Decision' or '### Proposal'
-        pattern = rf"^\s*#{{1,3}}\s+{re.escape(synonym)}\s*$"
+        # Match heading line capturing level hashes (1-6)
+        pattern = rf"^\s*(#{{1,6}})\s+.*?\b{re.escape(synonym)}\b.*$"
         match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
-        if not match:
-            # Looser match, e.g. '## 3. Decision Outcome' or '### Proposal Summary'
-            pattern = rf"^\s*#{{1,3}}\s+.*?\b{re.escape(synonym)}\b.*$"
-            match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
 
         if match:
+            heading_hashes = match.group(1)
+            heading_level = len(heading_hashes)
             start = match.end()
             remainder = text[start:]
-            # Match next level-1 or level-2 heading at line start
-            next_match = re.search(r"\n#{1,2}\s+", remainder)
+
+            # Next heading pattern: next line starting with 1 to heading_level '#' characters
+            next_heading_pattern = rf"\n#{{1,{heading_level}}}\s+"
+            next_match = re.search(next_heading_pattern, remainder)
             if next_match:
                 section_text = remainder[: next_match.start()]
             else:
                 section_text = remainder
+
             content = section_text.strip()
             if content and len(content) >= 15:
                 return content
     return ""
+
+
+def extract_structured_items(text: str) -> list[str]:
+    """
+    Parses structured Markdown items (bullets, numbered lists, subheadings).
+    Avoids converting ordinary prose paragraphs into separate individual items.
+    """
+    if not text:
+        return []
+
+    lines = text.splitlines()
+    items: list[str] = []
+    current_item: list[str] = []
+
+    bullet_or_number_re = re.compile(r"^\s*([-*+]|\d+\.)\s+(.+)$")
+    subheading_re = re.compile(r"^\s*#{2,6}\s+(.+)$")
+
+    has_explicit_list_markers = any(bullet_or_number_re.match(l) for l in lines)
+
+    if has_explicit_list_markers:
+        for line in lines:
+            line_str = line.strip()
+            if not line_str:
+                continue
+
+            match = bullet_or_number_re.match(line)
+            if match:
+                if current_item:
+                    items.append(" ".join(current_item).strip())
+                    current_item = []
+                current_item.append(match.group(2).strip())
+            else:
+                sub_match = subheading_re.match(line)
+                if sub_match:
+                    if current_item:
+                        items.append(" ".join(current_item).strip())
+                        current_item = []
+                    items.append(sub_match.group(1).strip())
+                elif current_item:
+                    current_item.append(line_str)
+        if current_item:
+            items.append(" ".join(current_item).strip())
+    else:
+        # Check if section consists of subheadings (e.g. ### Option 1 ... ### Option 2)
+        subheadings = [line for line in lines if subheading_re.match(line)]
+        if subheadings and len(subheadings) >= 1:
+            for line in lines:
+                sub_match = subheading_re.match(line)
+                if sub_match:
+                    if current_item:
+                        items.append("\n".join(current_item).strip())
+                        current_item = []
+                    items.append(sub_match.group(1).strip())
+                elif line.strip() and current_item:
+                    current_item.append(line.strip())
+            if current_item:
+                items.append("\n".join(current_item).strip())
+        else:
+            clean_text = text.strip()
+            if clean_text:
+                items.append(clean_text)
+
+    return [item.strip("- *") for item in items if item and len(item.strip("- *")) > 0]

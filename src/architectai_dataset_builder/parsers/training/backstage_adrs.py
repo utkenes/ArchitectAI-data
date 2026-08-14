@@ -15,8 +15,10 @@ from architectai_dataset_builder.utils.markdown import (
     CONTEXT_SYNONYMS,
     DECISION_SYNONYMS,
     extract_markdown_section,
+    extract_structured_items,
     has_template_placeholders,
     is_boilerplate_filename,
+    sanitize_markdown,
 )
 
 
@@ -54,6 +56,9 @@ class BackstageADRParser(BaseParser):
         text = file_path.read_text(encoding="utf-8", errors="ignore")
         raw_hash = compute_sha256_file(file_path)
 
+        # 1. Sanitize raw markdown (strips HTML comments, template guidelines)
+        sanitized_text = sanitize_markdown(text)
+
         record_id = file_path.stem
         rel_path = file_path.relative_to(raw_dir).as_posix()
         sample_id = generate_stable_sample_id(
@@ -62,8 +67,8 @@ class BackstageADRParser(BaseParser):
             record_id=record_id,
         )
 
-        # 1. Quarantine unresolved template placeholders
-        if has_template_placeholders(text):
+        # 2. Quarantine unresolved template placeholders post-sanitization
+        if has_template_placeholders(sanitized_text):
             return {
                 "sample_id": sample_id,
                 "source_id": self.source_id,
@@ -72,18 +77,18 @@ class BackstageADRParser(BaseParser):
                 "raw_sha256": raw_hash,
                 "is_quarantined": True,
                 "quarantine_reason": "unresolved_template_placeholder",
-                "raw_text": text,
+                "raw_text": sanitized_text,
             }
 
-        title_match = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
+        title_match = re.search(r"^#\s+(.+)$", sanitized_text, re.MULTILINE)
         title = title_match.group(1).strip() if title_match else file_path.stem
 
-        context = extract_markdown_section(text, CONTEXT_SYNONYMS)
-        decision = extract_markdown_section(text, DECISION_SYNONYMS)
-        consequences = extract_markdown_section(text, CONSEQUENCE_SYNONYMS)
-        alternatives = extract_markdown_section(text, ALTERNATIVE_SYNONYMS)
+        context = extract_markdown_section(sanitized_text, CONTEXT_SYNONYMS)
+        decision = extract_markdown_section(sanitized_text, DECISION_SYNONYMS)
+        consequences_raw = extract_markdown_section(sanitized_text, CONSEQUENCE_SYNONYMS)
+        alternatives_raw = extract_markdown_section(sanitized_text, ALTERNATIVE_SYNONYMS)
 
-        # 2. Strict grounding: Require genuine decision and context section
+        # 3. Strict grounding: Require genuine decision and context section
         is_decision_valid = bool(decision) and decision.lower() != "not explicitly stated" and len(decision.strip()) >= 15
         is_context_valid = bool(context) and len(context.strip()) >= 30
 
@@ -96,8 +101,11 @@ class BackstageADRParser(BaseParser):
                 "raw_sha256": raw_hash,
                 "is_quarantined": True,
                 "quarantine_reason": "missing_decision_section",
-                "raw_text": text,
+                "raw_text": sanitized_text,
             }
+
+        consequences = extract_structured_items(consequences_raw)
+        alternatives = extract_structured_items(alternatives_raw)
 
         return {
             "sample_id": sample_id,
@@ -109,8 +117,8 @@ class BackstageADRParser(BaseParser):
             "context": context,
             "decision": decision,
             "decision_outcome": decision,
-            "consequences": [c.strip("- *") for c in consequences.split("\n") if c.strip("- *")],
-            "alternatives": [a.strip("- *") for a in alternatives.split("\n") if a.strip("- *")],
-            "raw_text": text,
+            "consequences": consequences,
+            "alternatives": alternatives,
+            "raw_text": sanitized_text,
             "is_quarantined": False,
         }
